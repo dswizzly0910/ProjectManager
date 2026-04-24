@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Team Project Board</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0; --surface: #ffffff; --surface2: #f0efe9;
+    --border: #e2e0d8; --border2: #ccc9bf;
+    --text: #1a1917; --text2: #5c5a55; --text3: #9b9890;
+    --accent: #1a6b4a; --accent-bg: #eaf4ee;
+    --danger: #c0392b; --danger-bg: #fdf0ee;
+    --warn: #b45309; --warn-bg: #fef3e2;
+    --info: #1a4d8f; --info-bg: #eef3fb;
+    --radius: 10px; --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+  .app { max-width: 1060px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── Topbar ── */
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+  .topbar-left h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .topbar-left .subtitle { font-size: 13px; color: var(--text3); margin-top: 2px; }
+  .breadcrumb { font-size: 13px; color: var(--text3); display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .breadcrumb .crumb-link { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .breadcrumb .crumb-link:hover { text-decoration: underline; }
+
+  /* ── Buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--surface); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; transition: all 0.15s; text-decoration: none; }
+  .btn:hover { background: var(--surface2); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #155a3d; border-color: #155a3d; }
+  .btn-danger { color: var(--danger); border-color: #e8c5c1; background: transparent; }
+  .btn-danger:hover { background: var(--danger-bg); }
+  .btn-edit { color: var(--info); border-color: #c8d9f0; background: transparent; }
+  .btn-edit:hover { background: var(--info-bg); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-icon { padding: 5px 9px; }
+
+  /* ── Master board metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 2rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; box-shadow: var(--shadow); }
+  .metric-label { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; color: var(--text); }
+  .metric-value.danger { color: var(--danger); }
+  .metric-value.accent { color: var(--accent); }
+
+  /* ── Project list ── */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; }
+  .project-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.4rem; margin-bottom: 10px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow); }
+  .project-item:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+  .project-item-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .project-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .project-meta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .meta-block { display: flex; flex-direction: column; gap: 2px; }
+  .meta-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .meta-value { font-size: 13px; color: var(--text); }
+
+  /* ── Badges ── */
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; }
+  .badge-active { background: var(--accent-bg); color: var(--accent); }
+  .badge-planning { background: var(--info-bg); color: var(--info); }
+  .badge-blocked { background: var(--danger-bg); color: var(--danger); }
+  .badge-complete { background: var(--surface2); color: var(--text2); }
+  .badge-paused { background: var(--warn-bg); color: var(--warn); }
+  .proj-priority { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; }
+  .pp-urgent { background: #fde8e8; color: #9b1111; }
+  .pp-very-important { background: var(--danger-bg); color: var(--danger); }
+  .pp-important { background: var(--warn-bg); color: var(--warn); }
+  .pp-low { background: var(--surface2); color: var(--text2); }
+  .pp-very-low { background: #f0efe9; color: var(--text3); }
+
+  /* ── Progress ── */
+  .progress-wrap { display: flex; align-items: center; gap: 8px; }
+  .progress-bar { height: 5px; background: var(--surface2); border-radius: 100px; overflow: hidden; flex: 1; min-width: 80px; }
+  .progress-fill { height: 100%; border-radius: 100px; background: var(--accent); transition: width 0.4s ease; }
+  .progress-pct { font-size: 12px; font-weight: 600; color: var(--text2); min-width: 32px; font-family: 'DM Mono', monospace; }
+
+  /* ── Blocker ── */
+  .blocker-notice { display: flex; align-items: flex-start; gap: 8px; background: var(--danger-bg); border: 1px solid #f5c5be; border-radius: var(--radius-sm); padding: 8px 12px; margin-top: 10px; font-size: 12px; color: var(--danger); }
+  .blocker-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex-shrink: 0; margin-top: 5px; }
+
+  /* ── Avatar ── */
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--info-bg); color: var(--info); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; border: 1.5px solid #d0dff5; }
+  .avatar-sm { width: 22px; height: 22px; font-size: 9px; }
+  .owner-row { display: flex; align-items: center; gap: 7px; }
+
+  /* ── Detail cards (overview) ── */
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+  .detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); }
+  .detail-card.full { grid-column: 1 / -1; }
+  .detail-field { margin-bottom: 1rem; }
+  .detail-field:last-child { margin-bottom: 0; }
+  .field-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+  .field-value { font-size: 14px; color: var(--text); }
+
+  /* ── Inline editable field ── */
+  .inline-edit-area { width: 100%; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; resize: vertical; min-height: 70px; line-height: 1.5; outline: none; transition: border-color 0.15s; }
+  .inline-edit-area:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px rgba(26,107,74,0.1); }
+  .inline-edit-input { width: 100%; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; outline: none; transition: border-color 0.15s; }
+  .inline-edit-input:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px rgba(26,107,74,0.1); }
+  .save-hint { font-size: 11px; color: var(--text3); margin-top: 5px; }
+
+  /* ── Timeline ── */
+  .timeline-outer { position: relative; height: 32px; background: var(--surface2); border-radius: 100px; overflow: hidden; }
+  .timeline-fill { height: 100%; background: linear-gradient(90deg, var(--accent-bg), var(--accent)); opacity: 0.7; border-radius: 100px; }
+  .timeline-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); box-shadow: 0 0 4px rgba(192,57,43,0.5); }
+  .timeline-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-bottom: 6px; font-family: 'DM Mono', monospace; }
+
+  /* ── Big progress (overview card) ── */
+  .big-progress { text-align: center; }
+  .big-pct { font-size: 42px; font-weight: 600; letter-spacing: -0.04em; color: var(--text); font-family: 'DM Mono', monospace; }
+  .big-pct span { font-size: 20px; color: var(--text3); }
+  .big-bar { height: 8px; background: var(--surface2); border-radius: 100px; overflow: hidden; margin-top: 10px; }
+  .big-bar-fill { height: 100%; border-radius: 100px; background: var(--accent); }
+
+  /* ── Tags ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: var(--info-bg); color: var(--info); border: 1px solid #c8d9f0; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 100px; display: inline-flex; align-items: center; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; border-bottom: 1.5px solid var(--border); margin-bottom: 1.5rem; }
+  .tab { padding: 9px 18px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -1.5px; transition: all 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── To-do list ── */
+  .todo-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .todo-controls-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .group-label { font-size: 12px; color: var(--text3); }
+  .group-select { font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 4px 26px 4px 8px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239b9890' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; outline: none; }
+  .group-select:focus { border-color: var(--accent); }
+  .group-header { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; padding: 10px 16px 6px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .todo-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); margin-bottom: 12px; }
+  .todo-item { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-item:hover { background: var(--surface2); }
+  .todo-check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border2); cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .todo-check.done { background: var(--accent); border-color: var(--accent); }
+  .todo-text { flex: 1; font-size: 13px; color: var(--text); min-width: 0; }
+  .todo-text.done { text-decoration: line-through; color: var(--text3); }
+  .todo-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .todo-due { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; white-space: nowrap; }
+  .todo-due.overdue { color: var(--danger); font-weight: 600; }
+  .tp-urgent { font-size: 11px; font-weight: 700; color: #9b1111; background: #fde8e8; padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+  .tp-very-important { font-size: 11px; font-weight: 700; color: var(--danger); background: var(--danger-bg); padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+  .tp-important { font-size: 11px; font-weight: 700; color: var(--warn); background: var(--warn-bg); padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+  .tp-low { font-size: 11px; font-weight: 700; color: var(--text2); background: var(--surface2); padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+  .tp-very-low { font-size: 11px; font-weight: 700; color: var(--text3); background: #f0efe9; padding: 2px 8px; border-radius: 100px; white-space: nowrap; }
+  .todo-owner { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .empty { text-align: center; padding: 3rem; color: var(--text3); }
+  .empty-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.5; }
+  .empty-text { font-size: 14px; }
+
+  /* ── Modal ── */
+  #confirm-overlay.open { display: flex !important; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,18,14,0.4); z-index: 100; align-items: flex-start; justify-content: center; padding: 2.5rem 1rem; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); width: 100%; max-width: 640px; padding: 1.75rem; box-shadow: 0 8px 40px rgba(0,0,0,0.15); }
+  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 1.5rem; letter-spacing: -0.01em; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+
+  /* ── Forms ── */
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 5px; display: block; }
+  .form-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  input[type=text], input[type=date], input[type=number], select, textarea {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm);
+    padding: 7px 11px; width: 100%; transition: border-color 0.15s; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,107,74,0.1); }
+  textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+  select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239b9890' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+  select[multiple] { appearance: auto; background-image: none; padding-right: 11px; min-height: 110px; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+
+  /* ── Main nav tabs ── */
+  .main-nav { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:1.75rem; }
+  .main-nav-tab { padding:9px 20px; font-size:14px; font-weight:500; cursor:pointer; color:var(--text3); border-bottom:2.5px solid transparent; margin-bottom:-2px; transition:all 0.15s; }
+  .main-nav-tab:hover { color:var(--text); }
+  .main-nav-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* ── Master To Dos ── */
+  .member-section { margin-bottom: 28px; }
+  .member-header { display:flex; align-items:center; gap:12px; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid var(--border); }
+  .member-avatar { width:36px; height:36px; border-radius:50%; background:var(--info-bg); color:var(--info); display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; border:2px solid #d0dff5; }
+  .member-name { font-size:16px; font-weight:600; color:var(--text); letter-spacing:-0.01em; }
+  .member-task-count { font-size:12px; color:var(--text3); margin-left:4px; }
+  .master-todo-source { font-size:10px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; background:var(--surface2); padding:2px 7px; border-radius:100px; white-space:nowrap; }
+  .master-todo-project { font-size:11px; color:var(--accent); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+
+  /* ── Training section ── */
+  .training-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:10px; box-shadow:var(--shadow); overflow:hidden; transition:border-color 0.15s; }
+  .training-card:hover { border-color:var(--border2); }
+  .training-card-header { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; gap:12px; flex-wrap:wrap; cursor:pointer; }
+  .training-card-header:hover { background:var(--surface2); }
+  .training-name { font-size:15px; font-weight:600; color:var(--text); letter-spacing:-0.01em; }
+  .training-name.complete { text-decoration:line-through; color:var(--text3); }
+  .training-body { border-top:1px solid var(--border); padding:1rem 1.25rem; background:var(--surface); }
+  .status-badge-ns { display:inline-flex; align-items:center; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:600; background:var(--surface2); color:var(--text2); }
+  .status-badge-ip { display:inline-flex; align-items:center; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:600; background:var(--info-bg); color:var(--info); }
+  .status-badge-done { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:600; background:var(--accent-bg); color:var(--accent); }
+  .training-todo-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .training-todo-item:last-child { border-bottom:none; }
+  .training-todo-text { flex:1; font-size:13px; color:var(--text); }
+  .training-todo-text.done { text-decoration:line-through; color:var(--text3); }
+
+  /* ── Excel Reporting tracker ── */
+  .excel-table-wrap { overflow-x:auto; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow); background:var(--surface); }
+  .excel-table { border-collapse:collapse; width:100%; min-width:600px; font-size:13px; }
+  .excel-table th { background:var(--surface2); font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.05em; padding:9px 12px; border-bottom:1.5px solid var(--border); white-space:nowrap; text-align:left; position:sticky; top:0; z-index:2; }
+  .excel-table th.week-col { text-align:center; min-width:72px; }
+  .excel-table th.week-col.current-week { background:var(--accent-bg); color:var(--accent); }
+  .excel-table td { padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .excel-table tr:last-child td { border-bottom:none; }
+  .excel-table tr:hover td { background:var(--surface2); }
+  .excel-table td.week-cell { text-align:center; }
+  .week-check { width:20px; height:20px; border-radius:5px; border:1.5px solid var(--border2); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s; background:var(--surface); }
+  .week-check.done { background:var(--accent); border-color:var(--accent); }
+  .week-check:hover:not(.done) { border-color:var(--accent); background:var(--accent-bg); }
+  .report-name-cell { font-weight:600; font-size:13px; color:var(--text); min-width:160px; }
+  .report-meta { font-size:11px; color:var(--text3); margin-top:2px; font-weight:400; }
+  .excel-report-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.25rem; margin-bottom:10px; box-shadow:var(--shadow); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .freq-badge { display:inline-flex; padding:2px 8px; border-radius:100px; font-size:11px; font-weight:600; background:var(--info-bg); color:var(--info); }
+
+  /* ── Goal cards ── */
+  .goal-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.1rem 1.25rem; margin-bottom:10px; box-shadow:var(--shadow); transition:all 0.15s; }
+  .goal-card:hover { border-color:var(--border2); box-shadow:0 4px 16px rgba(0,0,0,0.07); }
+  .goal-card.achieved { opacity:0.65; }
+  .goal-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px; }
+  .goal-card-title { font-size:15px; font-weight:600; color:var(--text); letter-spacing:-0.01em; }
+  .goal-card-title.achieved { text-decoration:line-through; color:var(--text3); }
+  .goal-card-desc { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:10px; }
+  .goal-card-meta { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .goal-deadline { font-size:12px; font-family:'DM Mono',monospace; color:var(--text3); display:flex; align-items:center; gap:4px; }
+  .goal-deadline.overdue { color:var(--danger); font-weight:600; }
+  .goal-deadline.soon { color:var(--warn); font-weight:600; }
+  .goal-achieved-badge { display:inline-flex; align-items:center; gap:4px; background:var(--accent-bg); color:var(--accent); border:1px solid #b6dfc8; font-size:11px; font-weight:600; padding:2px 9px; border-radius:100px; }
+  .goal-progress-bar { height:4px; background:var(--surface2); border-radius:100px; overflow:hidden; flex:1; min-width:80px; margin-top:2px; }
+  .goal-progress-fill { height:100%; border-radius:100px; background:var(--accent); }
+  .goals-grid { display:grid; grid-template-columns:1fr; gap:0; }
+
+  /* ── Ad Hoc task list ── */
+  .adhoc-task-item { display:flex; align-items:flex-start; gap:12px; padding:13px 16px; border-bottom:1px solid var(--border); transition:background 0.1s; }
+  .adhoc-task-item:last-child { border-bottom:none; }
+  .adhoc-task-item:hover { background:var(--surface2); }
+  .adhoc-task-body { flex:1; min-width:0; }
+  .adhoc-task-title { font-size:14px; font-weight:500; color:var(--text); margin-bottom:3px; }
+  .adhoc-task-title.done { text-decoration:line-through; color:var(--text3); }
+  .adhoc-task-desc { font-size:12px; color:var(--text2); line-height:1.5; }
+  .adhoc-task-desc.done { color:var(--text3); }
+
+  /* ── Sort / collapse controls ── */
+  .board-controls { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .board-controls-label { font-size:12px; color:var(--text3); font-weight:500; }
+  .sort-btn { padding:5px 12px; border-radius:var(--radius-sm); border:1px solid var(--border2); background:var(--surface); font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500; color:var(--text2); cursor:pointer; transition:all 0.15s; display:inline-flex; align-items:center; gap:5px; }
+  .sort-btn:hover { background:var(--surface2); color:var(--text); }
+  .sort-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); }
+  .group-header-row { display:flex; align-items:center; gap:10px; margin-top:12px; margin-bottom:6px; cursor:pointer; user-select:none; padding:6px 0; }
+  .group-header-row:hover .group-chevron { opacity:1; }
+  .group-chevron { width:18px; height:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; opacity:0.6; transition:transform 0.2s; }
+  .group-chevron.collapsed { transform:rotate(-90deg); }
+  .group-header-name { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; white-space:nowrap; }
+  .group-header-line { flex:1; height:1px; }
+  .group-header-count { font-size:11px; color:var(--text3); white-space:nowrap; }
+  .group-projects { overflow:hidden; }
+
+  /* ── Rock Related toggle ── */
+  .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .toggle-track { width: 36px; height: 20px; border-radius: 100px; background: var(--border2); border: 1px solid var(--border2); position: relative; transition: background 0.2s, border-color 0.2s; flex-shrink: 0; }
+  .toggle-track.on { background: var(--accent); border-color: var(--accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle-track.on .toggle-thumb { left: 18px; }
+  .toggle-label { font-size: 13px; color: var(--text); font-weight: 500; }
+  .rock-badge { display: inline-flex; align-items: center; gap: 5px; background: #fde8e8; color: #9b1111; border: 1px solid #f5c5be; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 100px; }
+  .rock-badge-off { display: inline-flex; align-items: center; gap: 5px; background: var(--surface2); color: var(--text3); border: 1px solid var(--border); font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 100px; }
+  /* form checkbox style */
+  .form-checkbox-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+  .form-checkbox-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  .form-checkbox-row span { font-size: 13px; color: var(--text); font-weight: 500; }
+
+  @media (max-width: 680px) {
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .form-grid2 { grid-template-columns: 1fr; }
+    .project-meta { gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="root"></div>
+<div id="sync-bar" style="position:fixed;top:0;left:0;right:0;z-index:400;height:3px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform 0.4s ease;"></div>
+<div id="sync-toast" style="position:fixed;top:16px;right:16px;z-index:500;background:var(--text);color:#fff;font-size:13px;font-weight:500;padding:10px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity 0.25s;display:flex;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,0.2);"></div>
+<div id="confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(20,18,14,0.45);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);width:100%;max-width:400px;padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,0.18);margin:1rem;">
+    <div style="font-size:15px;font-weight:600;margin-bottom:0.75rem;">Confirm</div>
+    <div id="confirm-message" style="font-size:14px;color:var(--text2);margin-bottom:1.5rem;line-height:1.5;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button id="confirm-cancel" class="btn">Cancel</button>
+      <button id="confirm-ok" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-content"></div>
+</div>
+<script>
+/* ── Apps Script Web App (replaces direct Sheets API) ── */
+
+/* ── Sync state ── */
+let syncing = false;
+
+function showToast(msg, isError) {
+  const t = document.getElementById('sync-toast');
+  if(!t) return;
+  t.innerHTML = isError
+    ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#f87171" stroke-width="1.5"/><path d="M7 4v3M7 9.5v.5" stroke="#f87171" stroke-width="1.5" stroke-linecap="round"/></svg> ${msg}`
+    : `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polyline points="2,7 6,11 12,3" stroke="#4ade80" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> ${msg}`;
+  t.style.opacity = '1';
+  setTimeout(() => t.style.opacity = '0', 3000);
+}
+
+function showSyncBar() {
+  const b = document.getElementById('sync-bar');
+  if(b) { b.style.transform = 'scaleX(1)'; setTimeout(() => b.style.transform = 'scaleX(0)', 600); }
+}
+
+/* ── Apps Script Web App helpers ── */
+const APPS_URL = 'https://script.google.com/macros/s/AKfycbxb3XtUDX04nYyyRvCxq7LuQN7OG3DQbR6jBFsCacmVNiiHEGR3jbJa2AnX722Lq4Lr/exec';
+
+async function sheetsGet(sheetName) {
+  const url = APPS_URL + '?sheet=' + encodeURIComponent(sheetName);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('GET failed: ' + r.status);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d.values || [];
+}
+
+async function sheetsUpdate(sheetName, values) {
+  const r = await fetch(APPS_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain'},
+    body: JSON.stringify({ sheet: sheetName, values })
+  });
+  if (!r.ok) throw new Error('POST failed: ' + r.status);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+/* ── Serialisation helpers ── */
+function rowsToProjects(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    return {
+      id: o.id, name: o.name, status: o.status, owner: o.owner,
+      priority: o.priority, projectGroup: o.projectGroup,
+      rockRelated: o.rockRelated === 'true',
+      progress: parseInt(o.progress)||0,
+      startDate: o.startDate, estCompletionDate: o.estCompletionDate,
+      completionDate: o.completionDate,
+      stakeholders: o.stakeholders ? o.stakeholders.split('|') : [],
+      blockers: o.blockers, goals: o.goals, sfCase: o.sfCase,
+      todos: []
+    };
+  }).filter(p => p.id);
+}
+
+function projectsToRows(projects) {
+  const hdr = ['id','name','status','owner','priority','projectGroup','rockRelated','progress','startDate','estCompletionDate','completionDate','stakeholders','blockers','goals','sfCase'];
+  const rows = [hdr];
+  projects.forEach(p => rows.push([
+    p.id, p.name||'', p.status||'', p.owner||'', p.priority||'',
+    p.projectGroup||'', String(!!p.rockRelated), p.progress||0,
+    p.startDate||'', p.estCompletionDate||'', p.completionDate||'',
+    (p.stakeholders||[]).join('|'), p.blockers||'', p.goals||'', p.sfCase||''
+  ]));
+  return rows;
+}
+
+function rowsToTodos(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:o.done==='true' };
+  }).filter(t => t.id);
+}
+
+function todosToRows(todos) {
+  const hdr = ['id','projectId','text','owner','priority','dueDate','done'];
+  const rows = [hdr];
+  todos.forEach(t => rows.push([t.id, t.projectId||'', t.text||'', t.owner||'', t.priority||'', t.dueDate||'', String(!!t.done)]));
+  return rows;
+}
+
+function rowsToAdHoc(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    return { id:o.id, text:o.text, notes:o.notes, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:o.done==='true' };
+  }).filter(t => t.id);
+}
+
+function adHocToRows(tasks) {
+  const hdr = ['id','text','notes','owner','priority','dueDate','done'];
+  const rows = [hdr];
+  tasks.forEach(t => rows.push([t.id, t.text||'', t.notes||'', t.owner||'', t.priority||'', t.dueDate||'', String(!!t.done)]));
+  return rows;
+}
+
+function rowsToGoals(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:o.deadline, achieved:o.achieved==='true' };
+  }).filter(g => g.id);
+}
+
+function goalsToRows(goals) {
+  const hdr = ['id','title','description','owner','deadline','achieved'];
+  const rows = [hdr];
+  goals.forEach(g => rows.push([g.id, g.title||'', g.description||'', g.owner||'', g.deadline||'', String(!!g.achieved)]));
+  return rows;
+}
+
+function rowsToExcelReports(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    let completions = {};
+    try { completions = o.completions ? JSON.parse(o.completions) : {}; } catch(e){}
+    return { id:o.id, name:o.name, owner:o.owner, frequency:o.frequency, dayTime:o.dayTime, notes:o.notes, completions };
+  }).filter(r => r.id);
+}
+
+function excelReportsToRows(reports) {
+  const hdr = ['id','name','owner','frequency','dayTime','notes','completions'];
+  const rows = [hdr];
+  reports.forEach(r => rows.push([r.id, r.name||'', r.owner||'', r.frequency||'', r.dayTime||'', r.notes||'', JSON.stringify(r.completions||{})]));
+  return rows;
+}
+
+function rowsToTrainings(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    return { id:o.id, name:o.name, status:o.status, dueDate:o.dueDate, todos:[] };
+  }).filter(t => t.id);
+}
+
+function trainingsToRows(trainings) {
+  const hdr = ['id','name','status','dueDate'];
+  const rows = [hdr];
+  trainings.forEach(t => rows.push([t.id, t.name||'', t.status||'', t.dueDate||'']));
+  return rows;
+}
+
+function rowsToTrainingTodos(rows) {
+  if (!rows.length) return [];
+  const [hdr, ...data] = rows;
+  return data.map(r => {
+    const o = {};
+    hdr.forEach((h,i) => o[h] = r[i]||'');
+    return { id:o.id, trainingId:o.trainingId, text:o.text, owner:o.owner, dueDate:o.dueDate, done:o.done==='true' };
+  }).filter(t => t.id);
+}
+
+function trainingTodosToRows(todos) {
+  const hdr = ['id','trainingId','text','owner','dueDate','done'];
+  const rows = [hdr];
+  todos.forEach(t => rows.push([t.id, t.trainingId||'', t.text||'', t.owner||'', t.dueDate||'', String(!!t.done)]));
+  return rows;
+}
+
+/* ── Load all data from Google Sheets ── */
+async function loadState() {
+  showToast('Loading data…', false);
+  try {
+    const [projRows, todoRows, adHocRows, goalRows, excelRows, trainRows, trainTodoRows] = await Promise.all([
+      sheetsGet('Projects'),
+      sheetsGet('Todos'),
+      sheetsGet('AdHocTasks'),
+      sheetsGet('Goals'),
+      sheetsGet('ExcelReports'),
+      sheetsGet('Trainings'),
+      sheetsGet('TrainingTodos'),
+    ]);
+
+    state.projects = rowsToProjects(projRows);
+    if (!state.projects.length) state.projects = DEFAULT_PROJECTS.map(p => ({...p}));
+
+    const allTodos = rowsToTodos(todoRows);
+    state.projects.forEach(p => {
+      p.todos = allTodos.filter(t => t.projectId === p.id);
+    });
+
+    state.adHocTasks = rowsToAdHoc(adHocRows);
+    state.teamGoals  = rowsToGoals(goalRows);
+    state.excelReports = rowsToExcelReports(excelRows);
+
+    const allTrainings = rowsToTrainings(trainRows);
+    const allTrainTodos = rowsToTrainingTodos(trainTodoRows);
+    allTrainings.forEach(t => { t.todos = allTrainTodos.filter(td => td.trainingId === t.id); });
+    state.trainings = allTrainings;
+
+    showToast('Data loaded', false);
+  } catch(e) {
+    console.error('Load error:', e);
+    showToast('Could not load from Google Sheets — using demo data', true);
+    state.projects = DEFAULT_PROJECTS.map(p => ({...p}));
+  }
+}
+
+/* ── Save all state to Google Sheets ── */
+async function saveState() {
+  if (syncing) return;
+  syncing = true;
+  showSyncBar();
+  try {
+    // Flatten todos with projectId
+    const allTodos = state.projects.flatMap(p =>
+      (p.todos||[]).map(t => ({...t, projectId: p.id}))
+    );
+    // Flatten training todos with trainingId
+    const allTrainTodos = (state.trainings||[]).flatMap(tr =>
+      (tr.todos||[]).map(t => ({...t, trainingId: tr.id}))
+    );
+
+    await Promise.all([
+      sheetsUpdate('Projects', projectsToRows(state.projects)),
+      sheetsUpdate('Todos', todosToRows(allTodos)),
+      sheetsUpdate('AdHocTasks', adHocToRows(state.adHocTasks||[])),
+      sheetsUpdate('Goals', goalsToRows(state.teamGoals||[])),
+      sheetsUpdate('ExcelReports', excelReportsToRows(state.excelReports||[])),
+      sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])),
+      sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos)),
+    ]);
+
+    showToast('Saved to Google Sheets ✓', false);
+  } catch(e) {
+    console.error('Save error:', e);
+    showToast('Save failed — check Apps Script deployment', true);
+  }
+  syncing = false;
+}
+
+const OWNER_OPTIONS = ['Data Team Manager', 'Data Analyst'];
+const STAKEHOLDER_OPTIONS = ['Matt Rayburn','Steve Burgess','Alfie S.','Alyssa Popa','Aaron O.','Holland B.'];
+const PROJECT_PRIORITY_OPTIONS = ['Very Low','Low','Important','Very Important','Urgent'];
+const TASK_PRIORITY_OPTIONS = ['Urgent','Very Important','Important','Low','Very Low'];
+const PROJECT_GROUP_OPTIONS = ['Excel to Power BI Migrations', 'AI Projects'];
+
+let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:false, projects:[], adHocTasks:[], adHocGroup:'none', teamGoals:[], excelReports:[], trainings:[], expandedTraining:null };
+
+const DEFAULT_PROJECTS = [
+  { id:'p1', name:'Website Redesign', status:'active', owner:'Data Team Manager',
+    stakeholders:['Matt Rayburn','Alyssa Popa'], startDate:'2026-02-01',
+    completionDate:'', estCompletionDate:'2026-05-15', priority:'Important',
+    blockers:'Waiting on brand guidelines from design team.', progress:45,
+    goals:'Deliver a modern, accessible website that improves user engagement and reflects our updated brand identity.',
+    sfCase:'', projectGroup:'', rockRelated:false,
+    todos:[
+      {id:'t1',text:'Finalize wireframes',owner:'Data Team Manager',priority:'Very Important',dueDate:'2026-04-30',done:true},
+      {id:'t2',text:'Stakeholder review session',owner:'Data Analyst',priority:'Urgent',dueDate:'2026-05-01',done:false},
+      {id:'t3',text:'Develop component library',owner:'Data Analyst',priority:'Important',dueDate:'2026-05-10',done:false}
+    ]},
+  { id:'p2', name:'Q2 Marketing Campaign', status:'planning', owner:'Data Analyst',
+    stakeholders:['Steve Burgess','Holland B.'], startDate:'2026-04-15',
+    completionDate:'', estCompletionDate:'2026-06-30', priority:'Low',
+    blockers:'', progress:12, goals:'', sfCase:'', projectGroup:'', rockRelated:false,
+    todos:[
+      {id:'t4',text:'Define campaign goals',owner:'Data Team Manager',priority:'Important',dueDate:'2026-04-25',done:true},
+      {id:'t5',text:'Draft creative brief',owner:'Data Analyst',priority:'Low',dueDate:'2026-05-05',done:false}
+    ]},
+  { id:'p3', name:'Data Pipeline Migration', status:'blocked', owner:'Data Team Manager',
+    stakeholders:['Aaron O.','Alfie S.'], startDate:'2026-01-15',
+    completionDate:'', estCompletionDate:'2026-04-30', priority:'Urgent',
+    blockers:'Missing access credentials for production DB. Awaiting IT approval.', progress:62,
+    goals:'Migrate legacy ETL pipelines to the new cloud infrastructure to reduce latency and improve reliability.',
+    sfCase:'SF-204819', projectGroup:'Excel to Power BI Migrations', rockRelated:true,
+    todos:[
+      {id:'t6',text:'Audit current pipeline',owner:'Data Team Manager',priority:'Very Important',dueDate:'2026-02-01',done:true},
+      {id:'t7',text:'Set up staging environment',owner:'Data Analyst',priority:'Very Important',dueDate:'2026-02-15',done:true},
+      {id:'t8',text:'Request DB access from IT',owner:'Data Team Manager',priority:'Urgent',dueDate:'2026-04-24',done:false},
+      {id:'t9',text:'Migrate all tables',owner:'Data Analyst',priority:'Important',dueDate:'2026-04-28',done:false}
+    ]}
+];
+
+/* Storage is handled by Google Sheets API above */
+
+
+
+/* old loadState removed */
+
+/* old saveState removed */
+
+/* getDataPayload removed */
+
+/* saveToFile removed */
+
+/* showSaveToast removed */
+
+/* ── Helpers ── */
+function uid() { return 'x'+Math.random().toString(36).slice(2,9); }
+function initials(n) { return (n||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase(); }
+function fmtDate(d) {
+  if(!d) return '—';
+  return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function isOverdue(d,done) { return !done && d && new Date(d+'T23:59:59')<new Date(); }
+function parseDate(d) {
+  if(!d) return null;
+  return new Date(/T/.test(d) ? d : d + 'T12:00:00');
+}
+function tlPct(s,e) {
+  if(!s||!e) return 0;
+  const sv=parseDate(s).getTime(),ev=parseDate(e).getTime(),n=Date.now();
+  if(isNaN(sv)||isNaN(ev)) return 0;
+  if(n<=sv) return 0; if(n>=ev) return 100;
+  return Math.round((n-sv)/(ev-sv)*100);
+}
+function todayPct(s,e) {
+  if(!s||!e) return null;
+  const sv=parseDate(s).getTime(),ev=parseDate(e).getTime(),n=Date.now();
+  if(isNaN(sv)||isNaN(ev)) return null;
+  if(n<sv||n>ev) return null;
+  return Math.round((n-sv)/(ev-sv)*100);
+}
+function badgeClass(s) {
+  return {active:'badge-active',planning:'badge-planning',blocked:'badge-blocked',complete:'badge-complete',paused:'badge-paused'}[s]||'badge-planning';
+}
+function projPriorityHtml(p) {
+  const m={'Urgent':'pp-urgent','Very Important':'pp-very-important','Important':'pp-important','Low':'pp-low','Very Low':'pp-very-low'};
+  return p?`<span class="proj-priority ${m[p]||'pp-low'}">${p}</span>`:'';
+}
+function taskPriorityHtml(p) {
+  const m={'Urgent':'tp-urgent','Very Important':'tp-very-important','Important':'tp-important','Low':'tp-low','Very Low':'tp-very-low'};
+  return p?`<span class="${m[p]||'tp-low'}">${p}</span>`:'';
+}
+function priorityRank(p) { return {'Urgent':0,'Very Important':1,'Important':2,'Low':3,'Very Low':4}[p]??5; }
+function checkSvg() { return `<svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Render ── */
+function render() { document.getElementById('root').innerHTML = state.view==='master'?renderMaster():state.view==='adhoc'?renderAdHoc():state.view==='goals'?renderGoals():state.view==='excel'?renderExcel():state.view==='training'?renderTraining():state.view==='mastertodos'?renderMasterTodos():renderProject(state.activeProject); }
+
+/* ── Master board ── */
+function renderMaster() {
+  const total=state.projects.length;
+  const blocked=state.projects.filter(p=>p.status==='blocked').length;
+  const complete=state.projects.filter(p=>p.status==='complete').length;
+  const avg=total?Math.round(state.projects.reduce((a,p)=>a+p.progress,0)/total):0;
+  const sb=state.sortBy||'none';
+  const ps=state.hideComplete ? state.projects.filter(p=>p.status!=='complete') : state.projects;
+
+  let html=`
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Data Team Project Board</h1>
+      <div class="subtitle">${total} project${total!==1?'s':''} total</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      
+      <button class="btn btn-primary" onclick="openNewProject()">+ New project</button>
+    </div>
+  </div>
+  <div class="main-nav">
+    <div class="main-nav-tab active" onclick="goMaster()">Projects</div>
+    <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
+    <div class="main-nav-tab" onclick="goGoals()">Goals</div>
+    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goTraining()">Training</div>
+    <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
+  </div>
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Total projects</div><div class="metric-value">${total}</div></div>
+    <div class="metric"><div class="metric-label">% Complete</div><div class="metric-value accent">${avg}%</div></div>
+    <div class="metric"><div class="metric-label">Blocked</div><div class="metric-value danger">${blocked}</div></div>
+    <div class="metric"><div class="metric-label">Completed</div><div class="metric-value">${complete}</div></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+    <div class="section-title" style="font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;">All projects</div>
+    <div class="board-controls">
+      <span class="board-controls-label">Sort by:</span>
+      <button class="sort-btn ${sb==='none'?'active':''}" onclick="setSortBy('none')">Default</button>
+      <button class="sort-btn ${sb==='owner'?'active':''}" onclick="setSortBy('owner')">Owner</button>
+      <button class="sort-btn ${sb==='priority'?'active':''}" onclick="setSortBy('priority')">Priority</button>
+      <button class="sort-btn ${sb==='progress'?'active':''}" onclick="setSortBy('progress')">% Complete</button>
+      <button class="sort-btn ${sb==='status'?'active':''}" onclick="setSortBy('status')">Status</button>
+      <span style="width:1px;height:18px;background:var(--border2);display:inline-block;margin:0 2px;"></span>
+      <button class="sort-btn ${state.groupByProject?'active':''}" onclick="toggleGroupBy()" title="Group projects by Project Group">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="7" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="7" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="7" y="7" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>
+        Group by Project Group
+      </button>
+      <button class="sort-btn ${state.hideComplete?'active':''}" onclick="toggleHideComplete()" title="Hide completed projects">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 6.5C1 6.5 3 2 6.5 2S12 6.5 12 6.5 10 11 6.5 11 1 6.5 1 6.5z" stroke="currentColor" stroke-width="1.4"/>${state.hideComplete?'<line x1="2" y1="2" x2="11" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>':'<circle cx="6.5" cy="6.5" r="1.8" fill="currentColor"/>'}</svg>
+        Hide Complete
+      </button>
+    </div>
+  </div>`;
+
+  if(!ps.length) { html+=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No projects yet. Create one to get started.</div></div>`; return html; }
+
+  // Sort helper
+  function sortProjects(arr) {
+    if (sb === 'owner') return [...arr].sort((a,b) => (a.owner||'').localeCompare(b.owner||''));
+    if (sb === 'priority') return [...arr].sort((a,b) => priorityRank(a.priority) - priorityRank(b.priority));
+    if (sb === 'progress') return [...arr].sort((a,b) => b.progress - a.progress);
+    if (sb === 'status') {
+      const order = {active:0, blocked:1, planning:2, paused:3, complete:4};
+      return [...arr].sort((a,b) => (order[a.status]??5) - (order[b.status]??5));
+    }
+    return arr;
+  }
+
+  function chevronSvg(collapsed) {
+    return `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" transform="${collapsed?'rotate(0,6,6)':'rotate(0,6,6)'}" style="transform-origin:50% 50%;transform:rotate(${collapsed?'-90':'0'}deg)"/></svg>`;
+  }
+
+  function renderProjectCard(p) {
+    const doneTodos=p.todos.filter(t=>t.done).length;
+    return `
+    <div class="project-item" onclick="openProject('${p.id}')">
+      <div class="project-item-top">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="project-name">${esc(p.name)}</div>
+          ${projPriorityHtml(p.priority)}
+          ${p.rockRelated?`<span style="display:inline-flex;align-items:center;gap:4px;background:#eaf4ee;color:#1a6b4a;border:1px solid #b6dfc8;font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px;"><svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#1a6b4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Rock Related</span>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge ${badgeClass(p.status)}">${p.status}</span>
+          <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteProject('${p.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="project-meta">
+        <div class="meta-block">
+          <div class="meta-label">Progress</div>
+          <div class="progress-wrap" style="margin-top:2px">
+            <div class="progress-bar"><div class="progress-fill" style="width:${p.progress}%"></div></div>
+            <span class="progress-pct">${p.progress}%</span>
+          </div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">Owner</div>
+          <div class="owner-row" style="margin-top:2px">
+            <span class="avatar">${initials(p.owner)}</span>
+            <span style="font-size:13px">${esc(p.owner||'—')}</span>
+          </div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">Est. completion</div>
+          <div class="meta-value">${fmtDate(p.estCompletionDate)}</div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">Tasks</div>
+          <div class="meta-value">${doneTodos} / ${p.todos.length}</div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">Stakeholders</div>
+          <div class="meta-value">${(p.stakeholders||[]).join(', ')||'—'}</div>
+        </div>
+      </div>
+      ${p.blockers?`<div class="blocker-notice"><div class="blocker-dot"></div><span>${esc(p.blockers)}</span></div>`:''}
+    </div>`;
+  }
+
+  function renderGroup(groupName, projects, accentColor, lineColor) {
+    const key = 'g_' + groupName;
+    const collapsed = !!state.collapsedGroups[key];
+    const sorted = sortProjects(projects);
+    return `
+    <div>
+      <div class="group-header-row" onclick="toggleGroupCollapse('${key}')">
+        <div class="group-chevron ${collapsed?'collapsed':''}">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,4 6,8 10,4" stroke="${accentColor}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="group-header-name" style="color:${accentColor}">${esc(groupName)}</span>
+        <div class="group-header-line" style="background:${lineColor}"></div>
+        <span class="group-header-count">${projects.length} project${projects.length!==1?'s':''}</span>
+      </div>
+      <div class="group-projects" style="${collapsed?'display:none':''}">
+        ${sorted.map(p => renderProjectCard(p)).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (state.groupByProject) {
+    // Separate into named groups and ungrouped
+    const grouped = {};
+    const ungrouped = [];
+    ps.forEach(p => {
+      if (p.projectGroup) {
+        if (!grouped[p.projectGroup]) grouped[p.projectGroup] = [];
+        grouped[p.projectGroup].push(p);
+      } else {
+        ungrouped.push(p);
+      }
+    });
+
+    // Render named groups
+    Object.keys(grouped).sort().forEach(groupName => {
+      html += renderGroup(groupName, grouped[groupName], 'var(--accent)', 'var(--accent-bg)');
+    });
+
+    // Render ungrouped
+    if (ungrouped.length) {
+      if (Object.keys(grouped).length > 0) {
+        html += renderGroup('No group', ungrouped, 'var(--text3)', 'var(--border)');
+      } else {
+        sortProjects(ungrouped).forEach(p => { html += renderProjectCard(p); });
+      }
+    }
+  } else {
+    // Flat list — just sort and render all
+    sortProjects(ps).forEach(p => { html += renderProjectCard(p); });
+  }
+
+  return html;
+}
+/* ── Project detail ── */
+function renderProject(id) {
+  const p=state.projects.find(x=>x.id===id);
+  if(!p) return '<div>Project not found.</div>';
+  let html=`
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="breadcrumb">
+        <a class="crumb-link" href="#" onclick="goMaster();return false;">Data Team Project Board</a>
+        <span>/</span><span>${esc(p.name)}</span>
+      </div>
+      <h1>${esc(p.name)}</h1>
+    </div>
+    <button class="btn" onclick="editProject('${id}')">Edit project</button>
+  </div>
+  <div class="tabs">
+    <div class="tab ${state.activeTab==='overview'?'active':''}" onclick="setTab('overview')">Overview</div>
+    <div class="tab ${state.activeTab==='todos'?'active':''}" onclick="setTab('todos')">To-do list (${p.todos.length})</div>
+  </div>`;
+
+  if(state.activeTab==='overview') {
+    const tp=tlPct(p.startDate,p.estCompletionDate);
+    const todayPos=todayPct(p.startDate,p.estCompletionDate);
+    html+=`
+    <div class="detail-grid">
+
+      <!-- % Complete + Status + Priority -->
+      <div class="detail-card">
+        <div class="big-progress">
+          <div class="big-pct">${p.progress}<span>%</span></div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">complete</div>
+          <div class="big-bar"><div class="big-bar-fill" style="width:${p.progress}%"></div></div>
+        </div>
+        <hr style="margin:1rem 0">
+        <div class="detail-field">
+          <div class="field-label">Status</div>
+          <span class="badge ${badgeClass(p.status)}">${p.status}</span>
+        </div>
+        <div class="detail-field">
+          <div class="field-label">Priority</div>
+          ${projPriorityHtml(p.priority)||'<span style="color:var(--text3);font-size:13px">—</span>'}
+        </div>
+        <div class="detail-field" style="margin-bottom:0">
+          <div class="field-label">Rock Related</div>
+          <div style="margin-top:4px">
+            ${p.rockRelated
+              ? '<span class="rock-badge"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" fill="#9b1111" opacity="0.15"/><path d="M6 2L7.2 5H10L7.8 7L8.6 10L6 8.2L3.4 10L4.2 7L2 5H4.8L6 2Z" fill="#9b1111"/></svg>Yes — Rock Related</span>'
+              : '<span class="rock-badge-off">No</span>'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Owner + Stakeholders + Project Group -->
+      <div class="detail-card">
+        <div class="detail-field">
+          <div class="field-label">Owner</div>
+          <div class="owner-row" style="margin-top:4px">
+            <span class="avatar">${initials(p.owner)}</span>
+            <span class="field-value">${esc(p.owner||'—')}</span>
+          </div>
+        </div>
+        <div class="detail-field">
+          <div class="field-label">Project Group</div>
+          <div class="field-value" style="margin-top:2px">${p.projectGroup?`<span class="tag" style="background:var(--accent-bg);color:var(--accent);border-color:var(--accent-bg)">${esc(p.projectGroup)}</span>`:'<span style="color:var(--text3);font-size:13px">—</span>'}</div>
+        </div>
+        <div class="detail-field" style="margin-bottom:0">
+          <div class="field-label">Stakeholders</div>
+          <div class="tag-list" style="margin-top:4px">
+            ${(p.stakeholders||[]).map(s=>`<span class="tag">${esc(s)}</span>`).join('')||'<span style="color:var(--text3);font-size:13px">None</span>'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Dates -->
+      <div class="detail-card">
+        <div class="detail-field"><div class="field-label">Start date</div><div class="field-value">${fmtDate(p.startDate)}</div></div>
+        <div class="detail-field"><div class="field-label">Est. completion date</div><div class="field-value">${fmtDate(p.estCompletionDate)}</div></div>
+        <div class="detail-field" style="margin-bottom:0"><div class="field-label">Actual completion date</div><div class="field-value">${fmtDate(p.completionDate)}</div></div>
+      </div>
+
+      <!-- Timeline + % completion bar -->
+      <div class="detail-card">
+        <div class="field-label" style="margin-bottom:10px">Timeline</div>
+        <div class="timeline-labels"><span>${fmtDate(p.startDate)}</span><span>${fmtDate(p.estCompletionDate)}</span></div>
+        <div class="timeline-outer">
+          <div class="timeline-fill" style="width:${tp}%"></div>
+          ${todayPos!==null?`<div class="timeline-today" style="left:${todayPos}%"></div>`:''}
+        </div>
+        ${todayPos!==null?`<div style="font-size:11px;color:var(--text3);margin-top:5px">Today is ${todayPos}% through the timeline</div>`:''}
+        <hr style="margin:1rem 0">
+        <div class="field-label" style="margin-bottom:8px">% Completion</div>
+        <div class="progress-wrap">
+          <div class="progress-bar" style="height:10px"><div class="progress-fill" style="width:${p.progress}%;height:10px"></div></div>
+          <span class="progress-pct" style="font-size:13px">${p.progress}%</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px">${p.todos.filter(t=>t.done).length} of ${p.todos.length} tasks complete</div>
+      </div>
+
+      <!-- Blockers (full width) -->
+      <div class="detail-card full">
+        <div class="field-label" style="margin-bottom:8px">Blockers</div>
+        ${p.blockers?`<div class="blocker-notice"><div class="blocker-dot"></div><span>${esc(p.blockers)}</span></div>`:`<div style="font-size:13px;color:var(--text3)">No blockers reported.</div>`}
+      </div>
+
+      <!-- Goals (full width, dropdown linked to Goals tab) -->
+      <div class="detail-card full">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="field-label">Goals</div>
+          ${!(state.teamGoals&&state.teamGoals.length)?`<a href="#" style="font-size:11px;color:var(--accent);text-decoration:none;" onclick="goGoals();return false;">+ Add goals in the Goals tab</a>`:''}
+        </div>
+        ${(state.teamGoals&&state.teamGoals.length)
+          ? `<select id="goals-input-${id}" onchange="saveGoals('${id}')" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 28px 7px 11px;width:100%;outline:none;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27 viewBox=%270 0 12 8%27%3E%3Cpath d=%27M1 1l5 5 5-5%27 stroke=%27%239b9890%27 stroke-width=%271.5%27 fill=%27none%27 stroke-linecap=%27round%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 10px center;transition:border-color 0.15s;">
+              <option value="">— No goal linked —</option>
+              ${(state.teamGoals||[]).map(g=>`<option value="${esc(g.id)}" ${(p.goals===g.id)?'selected':''}>${esc(g.title)}${g.deadline?' (due '+fmtDate(g.deadline)+')':''}</option>`).join('')}
+            </select>
+            ${p.goals&&(state.teamGoals||[]).find(g=>g.id===p.goals)
+              ? `<div style="margin-top:8px;padding:8px 12px;background:var(--accent-bg);border-radius:var(--radius-sm);border:1px solid #b6dfc8;">
+                  ${(()=>{const g=(state.teamGoals||[]).find(x=>x.id===p.goals); return g?`<div style="font-size:13px;font-weight:600;color:var(--accent);">${esc(g.title)}</div>${g.description?`<div style="font-size:12px;color:var(--text2);margin-top:3px;">${esc(g.description)}</div>`:''}${g.deadline?`<div style="font-size:11px;color:var(--text3);margin-top:4px;font-family:'DM Mono',monospace;">Deadline: ${fmtDate(g.deadline)}</div>`:''}`:''})()}
+                </div>`
+              : ''}
+            <div class="save-hint">Selection saves automatically.</div>`
+          : `<div style="font-size:13px;color:var(--text3);padding:8px 0;">No goals defined yet. Visit the Goals tab to create team goals, then link them here.</div>`}
+      </div>
+
+      <!-- Salesforce Case # (full width, inline editable) -->
+      <div class="detail-card full">
+        <div class="field-label" style="margin-bottom:8px">Salesforce Case #</div>
+        <input type="text" class="inline-edit-input" id="sfcase-input-${id}" placeholder="Paste Salesforce case number here…" value="${esc(p.sfCase||'')}" onblur="saveSfCase('${id}')">
+        <div class="save-hint">Changes are saved automatically when you click away.</div>
+      </div>
+
+    </div>`;
+  }
+
+  if(state.activeTab==='todos') {
+    const grp = state.todoGroup || 'none';
+    html+=`
+    <div class="todo-controls">
+      <div style="font-size:13px;color:var(--text2)">${p.todos.filter(t=>t.done).length} of ${p.todos.length} tasks complete</div>
+      <div class="todo-controls-left">
+        <span class="group-label">Group by:</span>
+        <select class="group-select" onchange="setTodoGroup(this.value)">
+          <option value="none" ${grp==='none'?'selected':''}>None</option>
+          <option value="owner" ${grp==='owner'?'selected':''}>Owner</option>
+          <option value="dueDate" ${grp==='dueDate'?'selected':''}>Due Date</option>
+          <option value="priority" ${grp==='priority'?'selected':''}>Priority</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="openNewTodo('${id}')">+ Add task</button>
+      </div>
+    </div>`;
+
+    if(!p.todos.length) {
+      html+=`<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">No tasks yet. Add one above.</div></div></div>`;
+    } else {
+      html += renderGroupedTodos(p, id, grp);
+    }
+  }
+  return html;
+}
+
+/* ── Grouped todos ── */
+function renderGroupedTodos(p, pid, grp) {
+  if(grp==='none') {
+    const sorted=[...p.todos].sort((a,b)=>priorityRank(a.priority)-priorityRank(b.priority));
+    return `<div class="todo-list">${sorted.map(t=>todoItemHtml(t,pid)).join('')}</div>`;
+  }
+
+  // Build groups
+  let groups = {};
+  let groupOrder = [];
+
+  if(grp==='priority') {
+    groupOrder = TASK_PRIORITY_OPTIONS;
+    groupOrder.forEach(k=>{ groups[k]=[]; });
+    groups['No Priority'] = [];
+    p.todos.forEach(t=>{ const k=t.priority&&groups[t.priority]!==undefined?t.priority:'No Priority'; groups[k].push(t); });
+  } else if(grp==='owner') {
+    const owners = [...new Set(p.todos.map(t=>t.owner||'Unassigned'))].sort();
+    owners.forEach(k=>{ groups[k]=[]; });
+    groupOrder = owners;
+    p.todos.forEach(t=>{ const k=t.owner||'Unassigned'; if(!groups[k]) groups[k]=[]; groups[k].push(t); });
+  } else if(grp==='dueDate') {
+    // Bucket: Overdue, Today, This Week, Later, No Date
+    const today=new Date(); today.setHours(0,0,0,0);
+    const endOfWeek=new Date(today); endOfWeek.setDate(today.getDate()+7);
+    groupOrder=['Overdue','Due Today','Due This Week','Due Later','No Due Date'];
+    groupOrder.forEach(k=>{ groups[k]=[]; });
+    p.todos.forEach(t=>{
+      if(!t.dueDate){ groups['No Due Date'].push(t); return; }
+      const d=new Date(t.dueDate+'T12:00:00');
+      if(d<today && !t.done) groups['Overdue'].push(t);
+      else if(d.toDateString()===today.toDateString()) groups['Due Today'].push(t);
+      else if(d<=endOfWeek) groups['Due This Week'].push(t);
+      else groups['Due Later'].push(t);
+    });
+  }
+
+  let html='';
+  groupOrder.forEach(key=>{
+    const items = groups[key]||[];
+    if(!items.length) return;
+    html+=`<div class="todo-list">
+      <div class="group-header">${esc(key)} <span style="font-weight:400;opacity:0.6">(${items.length})</span></div>
+      ${items.map(t=>todoItemHtml(t,pid)).join('')}
+    </div>`;
+  });
+  if(!html) html=`<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">No tasks yet.</div></div></div>`;
+  return html;
+}
+
+function todoItemHtml(t, pid) {
+  const ov=isOverdue(t.dueDate,t.done);
+  return `
+  <div class="todo-item">
+    <div class="todo-check ${t.done?'done':''}" onclick="toggleTodo('${pid}','${t.id}')">${t.done?checkSvg():''}</div>
+    <div class="todo-text ${t.done?'done':''}">${esc(t.text)}</div>
+    <div class="todo-meta">
+      ${taskPriorityHtml(t.priority)}
+      ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
+      ${t.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(t.owner)}</span>${esc(t.owner)}</div>`:''}
+      <button class="btn btn-sm btn-edit btn-icon" onclick="openEditTodo('${pid}','${t.id}')" title="Edit task">✎</button>
+      <button class="btn btn-sm btn-danger btn-icon" onclick="deleteTodo('${pid}','${t.id}')" title="Delete task">×</button>
+    </div>
+  </div>`;
+}
+
+
+/* ── Ad Hoc Tasks view ── */
+function renderAdHoc() {
+  const tasks = state.adHocTasks || [];
+  const grp = state.adHocGroup || 'none';
+  const done = tasks.filter(t=>t.done).length;
+
+  let html = `
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Data Team Project Board</h1>
+      <div class="subtitle">&nbsp;</div>
+    </div>
+    <button class="btn btn-primary" onclick="openNewAdHoc()">+ Add task</button>
+  </div>
+  <div class="main-nav">
+    <div class="main-nav-tab" onclick="goMaster()">Projects</div>
+    <div class="main-nav-tab active" onclick="goAdHoc()">Ad Hoc Tasks</div>
+    <div class="main-nav-tab" onclick="goGoals()">Goals</div>
+    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goTraining()">Training</div>
+    <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+    <div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Ad Hoc Tasks</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${done} of ${tasks.length} complete</div>
+    </div>
+    <div class="board-controls">
+      <span class="board-controls-label">Group by:</span>
+      <button class="sort-btn ${grp==='none'?'active':''}" onclick="setAdHocGroup('none')">None</button>
+      <button class="sort-btn ${grp==='owner'?'active':''}" onclick="setAdHocGroup('owner')">Owner</button>
+      <button class="sort-btn ${grp==='priority'?'active':''}" onclick="setAdHocGroup('priority')">Priority</button>
+      <button class="sort-btn ${grp==='dueDate'?'active':''}" onclick="setAdHocGroup('dueDate')">Due Date</button>
+    </div>
+  </div>`;
+
+  if (!tasks.length) {
+    html += `<div class="todo-list"><div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No ad hoc tasks yet. Add one above.</div></div></div>`;
+    return html;
+  }
+
+  function adHocItemHtml(t) {
+    const ov = isOverdue(t.dueDate, t.done);
+    return `
+    <div class="adhoc-task-item">
+      <div class="todo-check ${t.done?'done':''}" style="margin-top:2px" onclick="toggleAdHoc('${t.id}')">${t.done?checkSvg():''}</div>
+      <div class="adhoc-task-body">
+        <div class="adhoc-task-title ${t.done?'done':''}">${esc(t.text)}</div>
+        ${t.notes?`<div class="adhoc-task-desc ${t.done?'done':''}">${esc(t.notes)}</div>`:''}
+      </div>
+      <div class="todo-meta">
+        ${taskPriorityHtml(t.priority)}
+        ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
+        ${t.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(t.owner)}</span>${esc(t.owner)}</div>`:''}
+        <button class="btn btn-sm btn-edit btn-icon" onclick="openEditAdHoc('${t.id}')" title="Edit">✎</button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteAdHoc('${t.id}')" title="Delete">×</button>
+      </div>
+    </div>`;
+  }
+
+  if (grp === 'none') {
+    const sorted = [...tasks].sort((a,b) => priorityRank(a.priority)-priorityRank(b.priority));
+    html += `<div class="todo-list">${sorted.map(adHocItemHtml).join('')}</div>`;
+    return html;
+  }
+
+  let groups = {}, groupOrder = [];
+  if (grp === 'priority') {
+    groupOrder = TASK_PRIORITY_OPTIONS;
+    groupOrder.forEach(k=>{ groups[k]=[]; });
+    groups['No Priority'] = [];
+    tasks.forEach(t=>{ const k=t.priority&&groups[t.priority]!==undefined?t.priority:'No Priority'; groups[k].push(t); });
+    groupOrder = [...TASK_PRIORITY_OPTIONS, 'No Priority'];
+  } else if (grp === 'owner') {
+    const owners = [...new Set(tasks.map(t=>t.owner||'Unassigned'))].sort();
+    owners.forEach(k=>{ groups[k]=[]; });
+    groupOrder = owners;
+    tasks.forEach(t=>{ const k=t.owner||'Unassigned'; if(!groups[k]) groups[k]=[]; groups[k].push(t); });
+  } else if (grp === 'dueDate') {
+    const today=new Date(); today.setHours(0,0,0,0);
+    const endOfWeek=new Date(today); endOfWeek.setDate(today.getDate()+7);
+    groupOrder=['Overdue','Due Today','Due This Week','Due Later','No Due Date'];
+    groupOrder.forEach(k=>{ groups[k]=[]; });
+    tasks.forEach(t=>{
+      if(!t.dueDate){ groups['No Due Date'].push(t); return; }
+      const d=new Date(t.dueDate+'T12:00:00');
+      if(d<today && !t.done) groups['Overdue'].push(t);
+      else if(d.toDateString()===today.toDateString()) groups['Due Today'].push(t);
+      else if(d<=endOfWeek) groups['Due This Week'].push(t);
+      else groups['Due Later'].push(t);
+    });
+  }
+
+  let groupHtml = '';
+  groupOrder.forEach(key => {
+    const items = groups[key] || [];
+    if (!items.length) return;
+    groupHtml += `<div class="todo-list">
+      <div class="group-header">${esc(key)} <span style="font-weight:400;opacity:0.6">(${items.length})</span></div>
+      ${items.map(adHocItemHtml).join('')}
+    </div>`;
+  });
+  html += groupHtml || `<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">No tasks.</div></div></div>`;
+  return html;
+}
+
+
+/* ── Goals view ── */
+function renderGoals() {
+  const goals = state.teamGoals || [];
+  const achieved = goals.filter(g=>g.achieved).length;
+
+  function deadlineStatus(d, achieved) {
+    if (!d || achieved) return '';
+    const dt = new Date(d+'T12:00:00');
+    const now = new Date();
+    const days = Math.round((dt-now)/(1000*60*60*24));
+    if (days < 0) return 'overdue';
+    if (days <= 7) return 'soon';
+    return '';
+  }
+
+  function deadlineLabel(d, achieved) {
+    if (!d) return '';
+    const dt = new Date(d+'T12:00:00');
+    const now = new Date();
+    const days = Math.round((dt-now)/(1000*60*60*24));
+    const fmt = fmtDate(d);
+    if (achieved) return fmt;
+    if (days < 0) return `Overdue by ${Math.abs(days)}d · ${fmt}`;
+    if (days === 0) return `Due today · ${fmt}`;
+    if (days === 1) return `Due tomorrow · ${fmt}`;
+    if (days <= 7) return `Due in ${days}d · ${fmt}`;
+    return fmt;
+  }
+
+  function goalCardHtml(g) {
+    const ds = deadlineStatus(g.deadline, g.achieved);
+    const dl = deadlineLabel(g.deadline, g.achieved);
+    return `
+    <div class="goal-card ${g.achieved?'achieved':''}">
+      <div class="goal-card-top">
+        <div style="flex:1;min-width:0;">
+          <div class="goal-card-title ${g.achieved?'achieved':''}">${esc(g.title)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${g.achieved?'<span class="goal-achieved-badge"><svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#1a6b4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Achieved</span>':''}
+          <button class="btn btn-sm ${g.achieved?'btn-edit':'btn-primary'}" onclick="toggleGoalAchieved('${g.id}')">${g.achieved?'Reopen':'Mark achieved'}</button>
+          <button class="btn btn-sm btn-edit btn-icon" onclick="openEditGoal('${g.id}')" title="Edit">✎</button>
+          <button class="btn btn-sm btn-danger btn-icon" onclick="deleteGoal('${g.id}')" title="Delete">×</button>
+        </div>
+      </div>
+      ${g.description?`<div class="goal-card-desc">${esc(g.description)}</div>`:''}
+      <div class="goal-card-meta">
+        ${g.deadline?`<span class="goal-deadline ${ds}"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v2M8 1v2M1 5h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>${dl}</span>`:''}
+        ${g.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(g.owner)}</span>${esc(g.owner)}</div>`:''}
+      </div>
+    </div>`;
+  }
+
+  const open = goals.filter(g=>!g.achieved);
+  const done = goals.filter(g=>g.achieved);
+
+  let html = `
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Data Team Project Board</h1>
+      <div class="subtitle">&nbsp;</div>
+    </div>
+    <button class="btn btn-primary" onclick="openNewGoal()">+ Add goal</button>
+  </div>
+  <div class="main-nav">
+    <div class="main-nav-tab" onclick="goMaster()">Projects</div>
+    <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
+    <div class="main-nav-tab active" onclick="goGoals()">Goals</div>
+    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goTraining()">Training</div>
+    <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+    <div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Team Goals</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${achieved} of ${goals.length} achieved</div>
+    </div>
+  </div>`;
+
+  if (!goals.length) {
+    html += `<div class="todo-list"><div class="empty"><div class="empty-icon">🎯</div><div class="empty-text">No goals yet. Add one above.</div></div></div>`;
+    return html;
+  }
+
+  if (open.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;">In progress (${open.length})</div>`;
+    html += `<div class="goals-grid">${open.map(goalCardHtml).join('')}</div>`;
+  }
+
+  if (done.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:${open.length?'24px':'0'};margin-bottom:10px;">Achieved (${done.length})</div>`;
+    html += `<div class="goals-grid">${done.map(goalCardHtml).join('')}</div>`;
+  }
+
+  return html;
+}
+
+
+/* ── Manual Excel Reporting view ── */
+function renderExcel() {
+  const reports = state.excelReports || [];
+
+  // Build weeks for this year starting from current week
+  function getWeeks() {
+    const weeks = [];
+    const now = new Date();
+    // Start of current week (Monday)
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    startOfWeek.setDate(startOfWeek.getDate() + diff);
+    startOfWeek.setHours(0,0,0,0);
+    // End of year
+    const endOfYear = new Date(now.getFullYear(), 11, 31);
+    let cur = new Date(startOfWeek);
+    while (cur <= endOfYear) {
+      const mon = new Date(cur);
+      const sun = new Date(cur); sun.setDate(sun.getDate() + 6);
+      weeks.push({
+        key: mon.toISOString().slice(0,10),
+        label: (mon.getMonth()+1)+'/'+ mon.getDate(),
+        isFirst: weeks.length === 0
+      });
+      cur.setDate(cur.getDate() + 7);
+    }
+    return weeks;
+  }
+
+  const weeks = getWeeks();
+
+  function toggleWeekCheck(reportId, weekKey) {
+    const r = state.excelReports.find(x=>x.id===reportId);
+    if (!r) return;
+    if (!r.completions) r.completions = {};
+    r.completions[weekKey] = !r.completions[weekKey];
+    saveState();
+    render();
+  }
+  window._toggleWeekCheck = toggleWeekCheck;
+
+  let html = `
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Data Team Project Board</h1>
+      <div class="subtitle">&nbsp;</div>
+    </div>
+    <button class="btn btn-primary" onclick="openNewExcelReport()">+ Add report</button>
+  </div>
+  <div class="main-nav">
+    <div class="main-nav-tab" onclick="goMaster()">Projects</div>
+    <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
+    <div class="main-nav-tab" onclick="goGoals()">Goals</div>
+    <div class="main-nav-tab active" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goTraining()">Training</div>
+    <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+    <div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Manual Excel Reporting</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${reports.length} report${reports.length!==1?'s':''} tracked — check off each week when complete</div>
+    </div>
+  </div>`;
+
+  if (!reports.length) {
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:3rem;text-align:center;box-shadow:var(--shadow);"><div style="font-size:32px;margin-bottom:10px;opacity:0.4;">📊</div><div style="font-size:14px;color:var(--text3);">No reports yet. Add one above to start tracking.</div></div>`;
+    return html;
+  }
+
+  // Build table header
+  let thead = `<thead><tr>
+    <th style="position:sticky;left:0;z-index:3;background:var(--surface2);min-width:200px;">Report</th>
+    <th>Owner</th>
+    <th>Frequency</th>
+    <th>Day &amp; Time</th>`;
+  weeks.forEach(w => {
+    thead += `<th class="week-col${w.isFirst?' current-week':''}">
+      ${w.isFirst?'<span style="font-size:9px;display:block;color:var(--accent);margin-bottom:1px;">THIS WEEK</span>':''}
+      ${w.label}
+    </th>`;
+  });
+  thead += `</tr></thead>`;
+
+  // Build table rows
+  let tbody = '<tbody>';
+  reports.forEach(r => {
+    tbody += `<tr>
+      <td style="position:sticky;left:0;background:var(--surface);z-index:1;">
+        <div class="report-name-cell">${esc(r.name)}</div>
+        ${r.notes?`<div class="report-meta">${esc(r.notes)}</div>`:''}
+      </td>
+      <td>
+        ${r.owner?`<div style="display:flex;align-items:center;gap:6px;"><span class="avatar avatar-sm">${initials(r.owner)}</span><span style="font-size:13px;">${esc(r.owner)}</span></div>`:'<span style="color:var(--text3)">—</span>'}
+      </td>
+      <td><span class="freq-badge">${esc(r.frequency||'—')}</span></td>
+      <td style="font-size:13px;color:var(--text2);white-space:nowrap;">${esc(r.dayTime||'—')}</td>`;
+    weeks.forEach(w => {
+      const done = !!(r.completions && r.completions[w.key]);
+      tbody += `<td class="week-cell">
+        <div class="week-check ${done?'done':''}" onclick="toggleWeekCheck('${r.id}','${w.key}')">
+          ${done?`<svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+        </div>
+      </td>`;
+    });
+    tbody += `<td style="white-space:nowrap;">
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-edit btn-icon" onclick="openEditExcelReport('${r.id}')" title="Edit">✎</button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteExcelReport('${r.id}')" title="Delete">×</button>
+      </div>
+    </td></tr>`;
+  });
+  tbody += '</tbody>';
+
+  html += `<div class="excel-table-wrap"><table class="excel-table">${thead}${tbody}</table></div>`;
+  html += `<div style="font-size:11px;color:var(--text3);margin-top:8px;">← Scroll horizontally to see all weeks through end of year</div>`;
+  return html;
+}
+
+function toggleWeekCheck(reportId, weekKey) {
+  const r = state.excelReports.find(x=>x.id===reportId);
+  if (!r) return;
+  if (!r.completions) r.completions = {};
+  r.completions[weekKey] = !r.completions[weekKey];
+  saveState();
+  render();
+}
+
+
+/* ── Training view ── */
+function renderTraining() {
+  const trainings = state.trainings || [];
+
+  function statusBadge(s) {
+    if (s === 'complete') return '<span class="status-badge-done"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><polyline points="1,4 4,7 9,1" stroke="#1a6b4a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span>';
+    if (s === 'in-progress') return '<span class="status-badge-ip">In Progress</span>';
+    return '<span class="status-badge-ns">Not Started</span>';
+  }
+
+  function dueDateHtml(d, status) {
+    if (!d) return '';
+    const dt = new Date(d+'T12:00:00'), now = new Date();
+    const days = Math.round((dt-now)/(1000*60*60*24));
+    let cls = 'color:var(--text3)', label = fmtDate(d);
+    if (status !== 'complete') {
+      if (days < 0) { cls='color:var(--danger);font-weight:600'; label=`Overdue · ${fmtDate(d)}`; }
+      else if (days <= 7) { cls='color:var(--warn);font-weight:600'; label=`Due in ${days}d · ${fmtDate(d)}`; }
+    }
+    return `<span style="font-size:12px;font-family:'DM Mono',monospace;${cls}">${label}</span>`;
+  }
+
+  const notDone = trainings.filter(t=>t.status!=='complete');
+  const done = trainings.filter(t=>t.status==='complete');
+
+  let html = `
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Data Team Project Board</h1>
+      <div class="subtitle">&nbsp;</div>
+    </div>
+    <button class="btn btn-primary" onclick="openNewTraining()">+ Add training</button>
+  </div>
+  <div class="main-nav">
+    <div class="main-nav-tab" onclick="goMaster()">Projects</div>
+    <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
+    <div class="main-nav-tab" onclick="goGoals()">Goals</div>
+    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab active" onclick="goTraining()">Training</div>
+    <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+    <div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Training</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${done.length} of ${trainings.length} complete</div>
+    </div>
+  </div>`;
+
+  if (!trainings.length) {
+    html += `<div class="training-card" style="text-align:center;padding:3rem;"><div style="font-size:32px;margin-bottom:10px;opacity:0.4;">🎓</div><div style="font-size:14px;color:var(--text3);">No training items yet. Add one above.</div></div>`;
+    return html;
+  }
+
+  function renderTrainingCard(tr) {
+    const expanded = state.expandedTraining === tr.id;
+    const todos = tr.todos || [];
+    const doneTodos = todos.filter(t=>t.done).length;
+    return `
+    <div class="training-card">
+      <div class="training-card-header" onclick="toggleTrainingExpand('${tr.id}')">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:0;">
+          <div class="training-name ${tr.status==='complete'?'complete':''}">${esc(tr.name)}</div>
+          ${statusBadge(tr.status)}
+          ${dueDateHtml(tr.dueDate, tr.status)}
+          ${todos.length?`<span style="font-size:11px;color:var(--text3);">${doneTodos}/${todos.length} tasks</span>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;flex-shrink:0;" onclick="event.stopPropagation()">
+          ${tr.status!=='complete'
+            ? `<button class="btn btn-sm btn-primary" onclick="markTrainingComplete('${tr.id}')">Mark complete</button>`
+            : `<button class="btn btn-sm btn-edit" onclick="reopenTraining('${tr.id}')">Reopen</button>`}
+          <button class="btn btn-sm btn-edit btn-icon" onclick="openEditTraining('${tr.id}')">✎</button>
+          <button class="btn btn-sm btn-danger btn-icon" onclick="deleteTraining('${tr.id}')">×</button>
+          <div style="font-size:16px;color:var(--text3);padding:0 4px;line-height:1;">${expanded?'▾':'▸'}</div>
+        </div>
+      </div>
+      ${expanded ? `
+      <div class="training-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;">To-do list</div>
+          <button class="btn btn-sm btn-primary" onclick="openNewTrainingTodo('${tr.id}')">+ Add task</button>
+        </div>
+        ${!todos.length
+          ? `<div style="font-size:13px;color:var(--text3);padding:8px 0;">No tasks yet.</div>`
+          : `<div>${todos.map(t=>{
+              const ov=isOverdue(t.dueDate,t.done);
+              return `
+            <div class="training-todo-item">
+              <div class="todo-check ${t.done?'done':''}" onclick="toggleTrainingTodo('${tr.id}','${t.id}')">${t.done?checkSvg():''}</div>
+              <div class="training-todo-text ${t.done?'done':''}">${esc(t.text)}</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;">
+                ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
+                ${t.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(t.owner)}</span>${esc(t.owner)}</div>`:''}
+                <button class="btn btn-sm btn-edit btn-icon" onclick="openEditTrainingTodo('${tr.id}','${t.id}')" title="Edit">✎</button>
+                <button class="btn btn-sm btn-danger btn-icon" onclick="deleteTrainingTodo('${tr.id}','${t.id}')">×</button>
+              </div>
+            </div>`;}).join('')}</div>`}
+      </div>` : ''}
+    </div>`;
+  }
+
+  if (notDone.length) {
+    html += notDone.map(renderTrainingCard).join('');
+  }
+  if (done.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin:${notDone.length?'20px':'0'} 0 10px;">Completed (${done.length})</div>`;
+    html += done.map(renderTrainingCard).join('');
+  }
+
+  return html;
+}
+
+
+/* ── Master To Dos view ── */
+function renderMasterTodos() {
+  // Collect all project todos
+  const projectTodos = state.projects.flatMap(p =>
+    (p.todos||[]).map(t => ({
+      ...t,
+      source: 'project',
+      sourceName: p.name,
+      sourceId: p.id
+    }))
+  );
+
+  // Collect all ad hoc tasks
+  const adHocTodos = (state.adHocTasks||[]).map(t => ({
+    ...t,
+    source: 'adhoc',
+    sourceName: 'Ad Hoc',
+    sourceId: null
+  }));
+
+  const allTasks = [...projectTodos, ...adHocTodos];
+
+  // Group by owner
+  const byOwner = {};
+  allTasks.forEach(t => {
+    const owner = t.owner || 'Unassigned';
+    if (!byOwner[owner]) byOwner[owner] = [];
+    byOwner[owner].push(t);
+  });
+
+  // Sort owners: named OWNER_OPTIONS first in order, then Unassigned
+  const ownerOrder = [...OWNER_OPTIONS, 'Unassigned'];
+  const sortedOwners = Object.keys(byOwner).sort((a,b) => {
+    const ai = ownerOrder.indexOf(a), bi = ownerOrder.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  const totalOpen = allTasks.filter(t=>!t.done).length;
+  const totalDone = allTasks.filter(t=>t.done).length;
+
+  let html = `
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Data Team Project Board</h1>
+      <div class="subtitle">&nbsp;</div>
+    </div>
+  </div>
+  <div class="main-nav">
+    <div class="main-nav-tab" onclick="goMaster()">Projects</div>
+    <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
+    <div class="main-nav-tab" onclick="goGoals()">Goals</div>
+    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goTraining()">Training</div>
+    <div class="main-nav-tab active" onclick="goMasterTodos()">Master To Dos</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+    <div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Master To Dos</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${totalOpen} open · ${totalDone} complete · ${allTasks.length} total across all projects &amp; ad hoc tasks</div>
+    </div>
+  </div>`;
+
+  if (!allTasks.length) {
+    html += `<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">No tasks found. Add tasks to projects or Ad Hoc Tasks.</div></div></div>`;
+    return html;
+  }
+
+  sortedOwners.forEach(owner => {
+    const tasks = byOwner[owner];
+    const openCount = tasks.filter(t=>!t.done).length;
+    const sorted = [...tasks].sort((a,b) => {
+      // Sort: open before done, then by priority, then by due date
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      const pr = priorityRank(a.priority) - priorityRank(b.priority);
+      if (pr !== 0) return pr;
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return 0;
+    });
+
+    html += `<div class="member-section">
+      <div class="member-header">
+        <span class="member-avatar">${initials(owner)}</span>
+        <span class="member-name">${esc(owner)}</span>
+        <span class="member-task-count">${openCount} open · ${tasks.length} total</span>
+      </div>
+      <div class="todo-list">`;
+
+    sorted.forEach(t => {
+      const ov = isOverdue(t.dueDate, t.done);
+      const isProject = t.source === 'project';
+      html += `
+      <div class="todo-item">
+        <div class="todo-check ${t.done?'done':''}" onclick="${isProject ? `toggleTodoMaster('${t.sourceId}','${t.id}')` : `toggleAdHoc('${t.id}')`}">${t.done?checkSvg():''}</div>
+        <div class="todo-text ${t.done?'done':''}" style="flex:1;min-width:0;">${esc(t.text)}</div>
+        <div class="todo-meta">
+          ${taskPriorityHtml(t.priority)}
+          ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
+          ${isProject
+            ? `<span class="master-todo-project" onclick="openProject('${t.sourceId}')" style="cursor:pointer;" title="${esc(t.sourceName)}">📁 ${esc(t.sourceName)}</span>`
+            : `<span class="master-todo-source">Ad Hoc</span>`}
+        </div>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  return html;
+}
+
+/* Toggle a project todo from the master todos view */
+function toggleTodoMaster(pid, tid) {
+  const p = state.projects.find(x=>x.id===pid);
+  if (!p) return;
+  const t = p.todos.find(x=>x.id===tid);
+  if (!t) return;
+  t.done = !t.done;
+  p.progress = p.todos.length ? Math.round(p.todos.filter(x=>x.done).length/p.todos.length*100) : 0;
+  saveState(); render();
+}
+
+/* ── Navigation ── */
+function goMaster() { state.view='master'; state.activeProject=null; render(); }
+function openProject(id) { state.view='project'; state.activeProject=id; state.activeTab='overview'; render(); }
+function setTab(t) { state.activeTab=t; render(); }
+function setTodoGroup(v) { state.todoGroup=v; render(); }
+function setSortBy(v) { state.sortBy=v; render(); }
+function toggleGroupBy() { state.groupByProject=!state.groupByProject; render(); }
+function toggleHideComplete() { state.hideComplete=!state.hideComplete; render(); }
+function toggleGroupCollapse(key) { state.collapsedGroups[key]=!state.collapsedGroups[key]; render(); }
+function goAdHoc() { state.view='adhoc'; render(); }
+function goGoals() { state.view='goals'; render(); }
+function goExcel() { state.view='excel'; render(); }
+function goTraining() { state.view='training'; render(); }
+function goMasterTodos() { state.view='mastertodos'; render(); }
+function toggleTrainingExpand(id) { state.expandedTraining = state.expandedTraining===id?null:id; render(); }
+function setAdHocGroup(v) { state.adHocGroup=v; render(); }
+function toggleAdHoc(tid) {
+  const t=state.adHocTasks.find(x=>x.id===tid);
+  if(t) { t.done=!t.done; saveState(); render(); }
+}
+function deleteAdHoc(tid) {
+  openConfirm('Delete this task? This cannot be undone.', function() {
+    state.adHocTasks=state.adHocTasks.filter(x=>x.id!==tid);
+    saveState(); render();
+  });
+}
+
+/* ── Goal actions ── */
+function toggleGoalAchieved(id) {
+  const g = state.teamGoals.find(x=>x.id===id);
+  if(g) { g.achieved=!g.achieved; saveState(); render(); }
+}
+function deleteGoal(id) {
+  openConfirm('Delete this goal? This cannot be undone.', function() {
+    state.teamGoals=state.teamGoals.filter(x=>x.id!==id);
+    saveState(); render();
+  });
+}
+function goalForm(title, saveCall, g) {
+  const d = g || {};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-group"><label class="form-label">Goal title *</label><input type="text" id="gf-title" value="${esc(d.title||'')}" placeholder="e.g. Migrate all Excel reports to Power BI"></div>
+    <div class="form-group"><label class="form-label">Description</label><textarea id="gf-desc" placeholder="What does achieving this goal look like?">${esc(d.description||'')}</textarea></div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Owner</label><select id="gf-owner">${ownerOpts(d.owner||'')}</select></div>
+      <div class="form-group"><label class="form-label">Deadline</label><input type="date" id="gf-deadline" value="${d.deadline||''}"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${g?'Save changes':'Add goal'}</button>
+    </div>`;
+}
+function openNewGoal() { openModal(goalForm('Add goal','saveNewGoal()',null)); setTimeout(()=>document.getElementById('gf-title').focus(),50); }
+function saveNewGoal() {
+  const title=document.getElementById('gf-title').value.trim(); if(!title) return;
+  if(!state.teamGoals) state.teamGoals=[];
+  state.teamGoals.push({ id:uid(), title, description:document.getElementById('gf-desc').value.trim(), owner:document.getElementById('gf-owner').value, deadline:document.getElementById('gf-deadline').value, achieved:false });
+  closeModal(); saveState(); render();
+}
+function openEditGoal(id) {
+  const g=state.teamGoals.find(x=>x.id===id);
+  if(!g) return;
+  openModal(goalForm('Edit goal',`saveEditGoal('${id}')`,g));
+}
+function saveEditGoal(id) {
+  const title=document.getElementById('gf-title').value.trim(); if(!title) return;
+  const g=state.teamGoals.find(x=>x.id===id);
+  if(!g) return;
+  g.title=title; g.description=document.getElementById('gf-desc').value.trim(); g.owner=document.getElementById('gf-owner').value; g.deadline=document.getElementById('gf-deadline').value;
+  closeModal(); saveState(); render();
+}
+
+/* ── Excel Report CRUD ── */
+const FREQ_OPTIONS = ['Daily','Weekly','Bi-weekly','Monthly','Quarterly'];
+function excelReportForm(title, saveCall, r) {
+  const d = r || {};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-group"><label class="form-label">Report name *</label><input type="text" id="er-name" value="${esc(d.name||'')}" placeholder="e.g. Weekly Sales Summary"></div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Owner</label><select id="er-owner"><option value="">— Select —</option>${OWNER_OPTIONS.map(o=>`<option value="${esc(o)}" ${(d.owner||'')===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Update frequency</label><select id="er-freq"><option value="">— Select —</option>${FREQ_OPTIONS.map(f=>`<option value="${esc(f)}" ${(d.frequency||'')===f?'selected':''}>${esc(f)}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Day &amp; time updated</label><input type="text" id="er-daytime" value="${esc(d.dayTime||'')}" placeholder="e.g. Monday 9:00 AM"></div>
+    <div class="form-group"><label class="form-label">Notes</label><input type="text" id="er-notes" value="${esc(d.notes||'')}" placeholder="Optional notes"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${r?'Save changes':'Add report'}</button>
+    </div>`;
+}
+function openNewExcelReport() { openModal(excelReportForm('Add report','saveNewExcelReport()',null)); setTimeout(()=>document.getElementById('er-name').focus(),50); }
+function saveNewExcelReport() {
+  const name=document.getElementById('er-name').value.trim(); if(!name) return;
+  if(!state.excelReports) state.excelReports=[];
+  state.excelReports.push({ id:uid(), name, owner:document.getElementById('er-owner').value, frequency:document.getElementById('er-freq').value, dayTime:document.getElementById('er-daytime').value.trim(), notes:document.getElementById('er-notes').value.trim(), completions:{} });
+  closeModal(); saveState(); render();
+}
+function openEditExcelReport(id) {
+  const r=state.excelReports.find(x=>x.id===id);
+  if(!r) return;
+  openModal(excelReportForm('Edit report',`saveEditExcelReport('${id}')`,r));
+}
+function saveEditExcelReport(id) {
+  const name=document.getElementById('er-name').value.trim(); if(!name) return;
+  const r=state.excelReports.find(x=>x.id===id);
+  if(!r) return;
+  r.name=name; r.owner=document.getElementById('er-owner').value; r.frequency=document.getElementById('er-freq').value; r.dayTime=document.getElementById('er-daytime').value.trim(); r.notes=document.getElementById('er-notes').value.trim();
+  closeModal(); saveState(); render();
+}
+function deleteExcelReport(id) {
+  openConfirm('Delete this report? This cannot be undone.', function() {
+    state.excelReports=state.excelReports.filter(x=>x.id!==id);
+    saveState(); render();
+  });
+}
+
+/* ── Training CRUD ── */
+const TRAINING_STATUS = ['not-started','in-progress','complete'];
+function trainingForm(title, saveCall, tr) {
+  const d = tr || {};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-group"><label class="form-label">Training name *</label><input type="text" id="tr-name" value="${esc(d.name||'')}" placeholder="e.g. Power BI Fundamentals"></div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Status</label><select id="tr-status">
+        <option value="not-started" ${(d.status||'not-started')==='not-started'?'selected':''}>Not Started</option>
+        <option value="in-progress" ${d.status==='in-progress'?'selected':''}>In Progress</option>
+        <option value="complete" ${d.status==='complete'?'selected':''}>Complete</option>
+      </select></div>
+      <div class="form-group"><label class="form-label">Due date</label><input type="date" id="tr-due" value="${d.dueDate||''}"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${tr?'Save changes':'Add training'}</button>
+    </div>`;
+}
+function openNewTraining() { openModal(trainingForm('Add training','saveNewTraining()',null)); setTimeout(()=>document.getElementById('tr-name').focus(),50); }
+function saveNewTraining() {
+  const name=document.getElementById('tr-name').value.trim(); if(!name) return;
+  if(!state.trainings) state.trainings=[];
+  state.trainings.push({ id:uid(), name, status:document.getElementById('tr-status').value, dueDate:document.getElementById('tr-due').value, todos:[] });
+  closeModal(); saveState(); render();
+}
+function openEditTraining(id) {
+  const tr=state.trainings.find(x=>x.id===id); if(!tr) return;
+  openModal(trainingForm('Edit training',`saveEditTraining('${id}')`,tr));
+}
+function saveEditTraining(id) {
+  const name=document.getElementById('tr-name').value.trim(); if(!name) return;
+  const tr=state.trainings.find(x=>x.id===id); if(!tr) return;
+  tr.name=name; tr.status=document.getElementById('tr-status').value; tr.dueDate=document.getElementById('tr-due').value;
+  closeModal(); saveState(); render();
+}
+function markTrainingComplete(id) {
+  const tr=state.trainings.find(x=>x.id===id);
+  if(tr) { tr.status='complete'; saveState(); render(); }
+}
+function reopenTraining(id) {
+  const tr=state.trainings.find(x=>x.id===id);
+  if(tr) { tr.status='not-started'; saveState(); render(); }
+}
+function deleteTraining(id) {
+  openConfirm('Delete this training? This cannot be undone.', function() {
+    state.trainings=state.trainings.filter(x=>x.id!==id);
+    if(state.expandedTraining===id) state.expandedTraining=null;
+    saveState(); render();
+  });
+}
+function trainingTodoForm(title, saveCall, t) {
+  const d = t || {};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-group"><label class="form-label">Task description *</label><input type="text" id="trt-text" value="${esc(d.text||'')}" placeholder="What needs to be done?"></div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Owner</label><select id="trt-owner"><option value="">— Unassigned —</option>${OWNER_OPTIONS.map(o=>`<option value="${esc(o)}" ${(d.owner||'')===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Deadline</label><input type="date" id="trt-due" value="${d.dueDate||''}"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${t?'Save changes':'Add task'}</button>
+    </div>`;
+}
+function openNewTrainingTodo(tid) {
+  openModal(trainingTodoForm('Add task', `saveNewTrainingTodo('${tid}')`, null));
+  setTimeout(()=>document.getElementById('trt-text').focus(),50);
+}
+function saveNewTrainingTodo(tid) {
+  const text=document.getElementById('trt-text').value.trim(); if(!text) return;
+  const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
+  if(!tr.todos) tr.todos=[];
+  tr.todos.push({ id:uid(), text, owner:document.getElementById('trt-owner').value, dueDate:document.getElementById('trt-due').value, done:false });
+  closeModal(); saveState(); render();
+}
+function openEditTrainingTodo(tid, todoId) {
+  const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
+  const t=tr.todos.find(x=>x.id===todoId); if(!t) return;
+  openModal(trainingTodoForm('Edit task', `saveEditTrainingTodo('${tid}','${todoId}')`, t));
+}
+function saveEditTrainingTodo(tid, todoId) {
+  const text=document.getElementById('trt-text').value.trim(); if(!text) return;
+  const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
+  const t=tr.todos.find(x=>x.id===todoId); if(!t) return;
+  t.text=text; t.owner=document.getElementById('trt-owner').value; t.dueDate=document.getElementById('trt-due').value;
+  closeModal(); saveState(); render();
+}
+function toggleTrainingTodo(tid, todoId) {
+  const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
+  const t=tr.todos.find(x=>x.id===todoId); if(!t) return;
+  t.done=!t.done; saveState(); render();
+}
+function deleteTrainingTodo(tid, todoId) {
+  const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
+  tr.todos=tr.todos.filter(x=>x.id!==todoId); saveState(); render();
+}
+
+/* ── Inline save (goals & SF case) ── */
+function saveGoals(id) {
+  const el=document.getElementById('goals-input-'+id);
+  if(!el) return;
+  const p=state.projects.find(x=>x.id===id);
+  if(!p) return;
+  p.goals=el.value;
+  saveState();
+  render();
+}
+function saveSfCase(id) {
+  const el=document.getElementById('sfcase-input-'+id);
+  if(!el) return;
+  const p=state.projects.find(x=>x.id===id);
+  if(!p) return;
+  p.sfCase=el.value.trim();
+  saveState();
+}
+
+/* ── Actions ── */
+function deleteProject(id) {
+  openConfirm('Delete this project? This cannot be undone.', function() {
+    state.projects = state.projects.filter(p => p.id !== id);
+    saveState();
+    render();
+  });
+}
+
+function openConfirm(message, onConfirm) {
+  const overlay = document.getElementById('confirm-overlay');
+  document.getElementById('confirm-message').textContent = message;
+  overlay.classList.add('open');
+  document.getElementById('confirm-ok').onclick = function() {
+    overlay.classList.remove('open');
+    onConfirm();
+  };
+  document.getElementById('confirm-cancel').onclick = function() {
+    overlay.classList.remove('open');
+  };
+}
+function toggleTodo(pid,tid) {
+  const p=state.projects.find(x=>x.id===pid), t=p.todos.find(x=>x.id===tid);
+  t.done=!t.done;
+  p.progress=p.todos.length?Math.round(p.todos.filter(x=>x.done).length/p.todos.length*100):0;
+  saveState(); render();
+}
+function deleteTodo(pid,tid) {
+  const p=state.projects.find(x=>x.id===pid);
+  p.todos=p.todos.filter(x=>x.id!==tid);
+  p.progress=p.todos.length?Math.round(p.todos.filter(x=>x.done).length/p.todos.length*100):0;
+  saveState(); render();
+}
+
+/* ── Modals ── */
+function openModal(html) { document.getElementById('modal-content').innerHTML=html; document.getElementById('modal-overlay').classList.add('open'); }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+document.getElementById('modal-overlay').addEventListener('click',function(e){ if(e.target===this) closeModal(); });
+
+function ownerOpts(sel) { return '<option value="">— Select —</option>'+OWNER_OPTIONS.map(o=>`<option value="${esc(o)}" ${sel===o?'selected':''}>${esc(o)}</option>`).join(''); }
+function stakeholderOpts(sel) { const s=sel||[]; return STAKEHOLDER_OPTIONS.map(o=>`<option value="${esc(o)}" ${s.includes(o)?'selected':''}>${esc(o)}</option>`).join(''); }
+function projPriorityOpts(sel) { return '<option value="">— Select —</option>'+PROJECT_PRIORITY_OPTIONS.map(o=>`<option value="${esc(o)}" ${sel===o?'selected':''}>${esc(o)}</option>`).join(''); }
+function taskPriorityOpts(sel) { return TASK_PRIORITY_OPTIONS.map(o=>`<option value="${esc(o)}" ${sel===o?'selected':''}>${esc(o)}</option>`).join(''); }
+function getMulti(id) { return Array.from(document.getElementById(id).selectedOptions).map(o=>o.value); }
+
+/* ── New / Edit Project ── */
+function projectFormHtml(title, saveCall, p) {
+  const d=p||{};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Project name *</label><input type="text" id="pf-name" value="${esc(d.name||'')}" placeholder="e.g. Data Pipeline Refresh"></div>
+      <div class="form-group"><label class="form-label">Status</label><select id="pf-status">${['planning','active','paused','blocked','complete'].map(s=>`<option value="${s}" ${(d.status||'planning')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Owner</label><select id="pf-owner">${ownerOpts(d.owner||'')}</select></div>
+      <div class="form-group"><label class="form-label">Priority</label><select id="pf-priority">${projPriorityOpts(d.priority||'')}</select></div>
+      <div class="form-group"><label class="form-label">Project Group</label><select id="pf-group"><option value="">— No group —</option>${PROJECT_GROUP_OPTIONS.map(g=>`<option value="${esc(g)}" ${(d.projectGroup||'')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">% Complete</label><input type="number" id="pf-pct" min="0" max="100" value="${d.progress??0}"></div>
+      <div class="form-group"><label class="form-label">Start date</label><input type="date" id="pf-start" value="${d.startDate||''}"></div>
+      <div class="form-group"><label class="form-label">Est. completion date</label><input type="date" id="pf-est" value="${d.estCompletionDate||''}"></div>
+      <div class="form-group"><label class="form-label">Actual completion date</label><input type="date" id="pf-done" value="${d.completionDate||''}"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Stakeholders <span style="font-weight:400;color:var(--text3)">(hold Ctrl / Cmd to select multiple)</span></label>
+      <select id="pf-stakeholders" multiple>${stakeholderOpts(d.stakeholders||[])}</select>
+    </div>
+    <div class="form-group"><label class="form-label">Blockers</label><textarea id="pf-blockers" placeholder="Describe any current blockers...">${esc(d.blockers||'')}</textarea></div>
+    <div class="form-group">
+      <label class="form-checkbox-row" onclick="document.getElementById('pf-rock').click()">
+        <input type="checkbox" id="pf-rock" ${d.rockRelated?'checked':''} onclick="event.stopPropagation()">
+        <span>Rock Related</span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${p?'Save changes':'Create project'}</button>
+    </div>`;
+}
+
+function openNewProject() { openModal(projectFormHtml('New project','saveNewProject()',null)); }
+function saveNewProject() {
+  const name=document.getElementById('pf-name').value.trim();
+  if(!name){ document.getElementById('pf-name').focus(); return; }
+  state.projects.push({ id:uid(), name, status:document.getElementById('pf-status').value, owner:document.getElementById('pf-owner').value, priority:document.getElementById('pf-priority').value, stakeholders:getMulti('pf-stakeholders'), startDate:document.getElementById('pf-start').value, completionDate:document.getElementById('pf-done').value, estCompletionDate:document.getElementById('pf-est').value, blockers:document.getElementById('pf-blockers').value.trim(), progress:Math.min(100,Math.max(0,parseInt(document.getElementById('pf-pct').value)||0)), projectGroup:document.getElementById('pf-group').value, rockRelated:document.getElementById('pf-rock').checked, goals:'', sfCase:'', todos:[] });
+  closeModal(); saveState(); render();
+}
+function editProject(id) {
+  const p=state.projects.find(x=>x.id===id);
+  openModal(projectFormHtml('Edit project',`saveEditProject('${id}')`,p));
+}
+function saveEditProject(id) {
+  const p=state.projects.find(x=>x.id===id);
+  const name=document.getElementById('pf-name').value.trim();
+  if(!name) return;
+  p.name=name; p.status=document.getElementById('pf-status').value; p.owner=document.getElementById('pf-owner').value; p.priority=document.getElementById('pf-priority').value; p.stakeholders=getMulti('pf-stakeholders'); p.startDate=document.getElementById('pf-start').value; p.estCompletionDate=document.getElementById('pf-est').value; p.completionDate=document.getElementById('pf-done').value; p.blockers=document.getElementById('pf-blockers').value.trim(); p.progress=Math.min(100,Math.max(0,parseInt(document.getElementById('pf-pct').value)||0)); p.projectGroup=document.getElementById('pf-group').value; p.rockRelated=document.getElementById('pf-rock').checked;
+  closeModal(); saveState(); render();
+}
+
+/* ── Ad Hoc modal ── */
+function adHocForm(title, saveCall, t) {
+  const d = t || {};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-group"><label class="form-label">Task title *</label><input type="text" id="ah-text" value="${esc(d.text||'')}" placeholder="What needs to be done?"></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea id="ah-notes" placeholder="Any additional context or details...">${esc(d.notes||'')}</textarea></div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Owner</label><select id="ah-owner">${ownerOpts(d.owner||'')}</select></div>
+      <div class="form-group"><label class="form-label">Priority</label><select id="ah-priority">${taskPriorityOpts(d.priority||'Important')}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Due date</label><input type="date" id="ah-due" value="${d.dueDate||''}"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${title==='Edit task'?'Save changes':'Add task'}</button>
+    </div>`;
+}
+function openNewAdHoc() { openModal(adHocForm('Add task','saveNewAdHoc()',null)); setTimeout(()=>document.getElementById('ah-text').focus(),50); }
+function saveNewAdHoc() {
+  const text=document.getElementById('ah-text').value.trim(); if(!text) return;
+  if(!state.adHocTasks) state.adHocTasks=[];
+  state.adHocTasks.push({ id:uid(), text, notes:document.getElementById('ah-notes').value.trim(), owner:document.getElementById('ah-owner').value, priority:document.getElementById('ah-priority').value, dueDate:document.getElementById('ah-due').value, done:false });
+  closeModal(); saveState(); render();
+}
+function openEditAdHoc(tid) {
+  const t=state.adHocTasks.find(x=>x.id===tid);
+  if(!t) return;
+  openModal(adHocForm('Edit task',`saveEditAdHoc('${tid}')`,t));
+}
+function saveEditAdHoc(tid) {
+  const text=document.getElementById('ah-text').value.trim(); if(!text) return;
+  const t=state.adHocTasks.find(x=>x.id===tid);
+  if(!t) return;
+  t.text=text; t.notes=document.getElementById('ah-notes').value.trim(); t.owner=document.getElementById('ah-owner').value; t.priority=document.getElementById('ah-priority').value; t.dueDate=document.getElementById('ah-due').value;
+  closeModal(); saveState(); render();
+}
+
+/* ── New / Edit Task ── */
+function todoForm(title,saveCall,t) {
+  const d=t||{};
+  return `
+    <div class="modal-title">${title}</div>
+    <div class="form-group"><label class="form-label">Task description *</label><input type="text" id="td-text" value="${esc(d.text||'')}" placeholder="What needs to be done?"></div>
+    <div class="form-grid2">
+      <div class="form-group"><label class="form-label">Assigned to</label><select id="td-owner">${ownerOpts(d.owner||'')}</select></div>
+      <div class="form-group"><label class="form-label">Priority</label><select id="td-priority">${taskPriorityOpts(d.priority||'Important')}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Due date</label><input type="date" id="td-due" value="${d.dueDate||''}"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="${saveCall}">${title==='Edit task'?'Save changes':'Add task'}</button>
+    </div>`;
+}
+function openNewTodo(pid) { openModal(todoForm('Add task',`saveNewTodo('${pid}')`,null)); setTimeout(()=>document.getElementById('td-text').focus(),50); }
+function saveNewTodo(pid) {
+  const text=document.getElementById('td-text').value.trim(); if(!text) return;
+  const p=state.projects.find(x=>x.id===pid);
+  p.todos.push({ id:uid(), text, owner:document.getElementById('td-owner').value, priority:document.getElementById('td-priority').value, dueDate:document.getElementById('td-due').value, done:false });
+  closeModal(); saveState(); render();
+}
+function openEditTodo(pid,tid) {
+  const p=state.projects.find(x=>x.id===pid), t=p.todos.find(x=>x.id===tid);
+  openModal(todoForm('Edit task',`saveEditTodo('${pid}','${tid}')`,t));
+}
+function saveEditTodo(pid,tid) {
+  const text=document.getElementById('td-text').value.trim(); if(!text) return;
+  const p=state.projects.find(x=>x.id===pid), t=p.todos.find(x=>x.id===tid);
+  t.text=text; t.owner=document.getElementById('td-owner').value; t.priority=document.getElementById('td-priority').value; t.dueDate=document.getElementById('td-due').value;
+  closeModal(); saveState(); render();
+}
+
+loadState().then(() => render()).catch(() => render());
+</script>
+</body>
+</html>
