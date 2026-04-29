@@ -88,6 +88,8 @@
   /* ── Avatar ── */
   .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--info-bg); color: var(--info); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; border: 1.5px solid #d0dff5; }
   .avatar-sm { width: 22px; height: 22px; font-size: 9px; }
+  .avatar-manager { background: #fce7f3; color: #be185d; border-color: #f9a8d4; }
+  .avatar-analyst { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
   .owner-row { display: flex; align-items: center; gap: 7px; }
 
   /* ── Detail cards (overview) ── */
@@ -191,6 +193,8 @@
   .member-section { margin-bottom: 28px; }
   .member-header { display:flex; align-items:center; gap:12px; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid var(--border); }
   .member-avatar { width:36px; height:36px; border-radius:50%; background:var(--info-bg); color:var(--info); display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; border:2px solid #d0dff5; }
+  .member-avatar.avatar-manager { background: #fce7f3; color: #be185d; border-color: #f9a8d4; }
+  .member-avatar.avatar-analyst { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
   .member-name { font-size:16px; font-weight:600; color:var(--text); letter-spacing:-0.01em; }
   .member-task-count { font-size:12px; color:var(--text3); margin-left:4px; }
   .master-todo-source { font-size:10px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; background:var(--surface2); padding:2px 7px; border-radius:100px; white-space:nowrap; }
@@ -334,7 +338,7 @@ function showSyncBar() {
 }
 
 /* ── Apps Script Web App helpers ── */
-const APPS_URL = 'https://script.google.com/macros/s/AKfycbxb3XtUDX04nYyyRvCxq7LuQN7OG3DQbR6jBFsCacmVNiiHEGR3jbJa2AnX722Lq4Lr/exec';
+const APPS_URL = 'https://script.google.com/macros/s/AKfycbz0hrt6SfA_YL8ZorJ9RRxkzOStw77bqXZ_OPIG-9lxORW9v9Ii6U0OnH50HzimxWP1/exec';
 
 async function sheetsGet(sheetName) {
   const url = APPS_URL + '?sheet=' + encodeURIComponent(sheetName);
@@ -345,16 +349,37 @@ async function sheetsGet(sheetName) {
   return d.values || [];
 }
 
-async function sheetsUpdate(sheetName, values) {
+async function sheetsUpdate(sheetName, values, notify) {
+  const body = { sheet: sheetName, values };
+  if (notify && notify.length) body.notify = notify;
   const r = await fetch(APPS_URL, {
     method: 'POST',
     headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify({ sheet: sheetName, values })
+    body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error('POST failed: ' + r.status);
   const d = await r.json();
   if (d.error) throw new Error(d.error);
   return d;
+}
+
+/* ── Notification helpers ── */
+// Tracks task+owner combos already notified so we only email on NEW assignments
+const _notifiedIds = new Set();
+
+function buildNotification(task, type, projectName) {
+  if (!task.owner || !task.id) return null;
+  const key = task.id + '::' + task.owner;
+  if (_notifiedIds.has(key)) return null; // already notified for this assignment
+  _notifiedIds.add(key);
+  return {
+    owner:       task.owner,
+    taskText:    task.text,
+    projectName: projectName || '',
+    dueDate:     task.dueDate ? fmtDate(task.dueDate) : '',
+    priority:    task.priority || '',
+    type:        type
+  };
 }
 
 /* ── Serialisation helpers ── */
@@ -372,20 +397,20 @@ function rowsToProjects(rows) {
       startDate: o.startDate, estCompletionDate: o.estCompletionDate,
       completionDate: o.completionDate,
       stakeholders: o.stakeholders ? o.stakeholders.split('|') : [],
-      blockers: o.blockers, goals: o.goals, sfCase: o.sfCase,
+      blockers: o.blockers, notes: o.notes, goals: o.goals, sfCase: o.sfCase,
       todos: []
     };
   }).filter(p => p.id);
 }
 
 function projectsToRows(projects) {
-  const hdr = ['id','name','status','owner','priority','projectGroup','rockRelated','progress','startDate','estCompletionDate','completionDate','stakeholders','blockers','goals','sfCase'];
+  const hdr = ['id','name','status','owner','priority','projectGroup','rockRelated','progress','startDate','estCompletionDate','completionDate','stakeholders','blockers','notes','goals','sfCase'];
   const rows = [hdr];
   projects.forEach(p => rows.push([
     p.id, p.name||'', p.status||'', p.owner||'', p.priority||'',
     p.projectGroup||'', String(!!p.rockRelated), p.progress||0,
     p.startDate||'', p.estCompletionDate||'', p.completionDate||'',
-    (p.stakeholders||[]).join('|'), p.blockers||'', p.goals||'', p.sfCase||''
+    (p.stakeholders||[]).join('|'), p.blockers||'', p.notes||'', p.goals||'', p.sfCase||''
   ]));
   return rows;
 }
@@ -553,13 +578,16 @@ async function saveState() {
 
     await Promise.all([
       sheetsUpdate('Projects', projectsToRows(state.projects)),
-      sheetsUpdate('Todos', todosToRows(allTodos)),
-      sheetsUpdate('AdHocTasks', adHocToRows(state.adHocTasks||[])),
+      sheetsUpdate('Todos', todosToRows(allTodos), state._pendingNotify||[]),
+      sheetsUpdate('AdHocTasks', adHocToRows(state.adHocTasks||[]), state._pendingAdHocNotify||[]),
       sheetsUpdate('Goals', goalsToRows(state.teamGoals||[])),
       sheetsUpdate('ExcelReports', excelReportsToRows(state.excelReports||[])),
       sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])),
-      sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos)),
+      sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]),
     ]);
+    state._pendingNotify = [];
+    state._pendingAdHocNotify = [];
+    state._pendingTrainingNotify = [];
 
     showToast('Saved to Google Sheets ✓', false);
   } catch(e) {
@@ -570,7 +598,7 @@ async function saveState() {
   if (pendingSave) { pendingSave = false; saveState(); }
 }
 
-const OWNER_OPTIONS = ['Data Team Manager', 'Data Analyst'];
+const OWNER_OPTIONS = ['Manager', 'Analyst'];
 const STAKEHOLDER_OPTIONS = ['Matt Rayburn','Steve Burgess','Alfie S.','Alyssa Popa','Aaron O.','Holland B.'];
 const PROJECT_PRIORITY_OPTIONS = ['Very Low','Low','Important','Very Important','Urgent'];
 const TASK_PRIORITY_OPTIONS = ['Urgent','Very Important','Important','Low','Very Low'];
@@ -579,36 +607,36 @@ const PROJECT_GROUP_OPTIONS = ['Excel to Power BI Migrations', 'AI Projects'];
 let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:false, projects:[], adHocTasks:[], adHocGroup:'none', teamGoals:[], excelReports:[], trainings:[], expandedTraining:null };
 
 const DEFAULT_PROJECTS = [
-  { id:'p1', name:'Website Redesign', status:'active', owner:'Data Team Manager',
+  { id:'p1', name:'Website Redesign', status:'active', owner:'Manager',
     stakeholders:['Matt Rayburn','Alyssa Popa'], startDate:'2026-02-01',
     completionDate:'', estCompletionDate:'2026-05-15', priority:'Important',
     blockers:'Waiting on brand guidelines from design team.', progress:45,
     goals:'Deliver a modern, accessible website that improves user engagement and reflects our updated brand identity.',
     sfCase:'', projectGroup:'', rockRelated:false,
     todos:[
-      {id:'t1',text:'Finalize wireframes',owner:'Data Team Manager',priority:'Very Important',dueDate:'2026-04-30',done:true},
-      {id:'t2',text:'Stakeholder review session',owner:'Data Analyst',priority:'Urgent',dueDate:'2026-05-01',done:false},
-      {id:'t3',text:'Develop component library',owner:'Data Analyst',priority:'Important',dueDate:'2026-05-10',done:false}
+      {id:'t1',text:'Finalize wireframes',owner:'Manager',priority:'Very Important',dueDate:'2026-04-30',done:true},
+      {id:'t2',text:'Stakeholder review session',owner:'Analyst',priority:'Urgent',dueDate:'2026-05-01',done:false},
+      {id:'t3',text:'Develop component library',owner:'Analyst',priority:'Important',dueDate:'2026-05-10',done:false}
     ]},
-  { id:'p2', name:'Q2 Marketing Campaign', status:'planning', owner:'Data Analyst',
+  { id:'p2', name:'Q2 Marketing Campaign', status:'planning', owner:'Analyst',
     stakeholders:['Steve Burgess','Holland B.'], startDate:'2026-04-15',
     completionDate:'', estCompletionDate:'2026-06-30', priority:'Low',
     blockers:'', progress:12, goals:'', sfCase:'', projectGroup:'', rockRelated:false,
     todos:[
-      {id:'t4',text:'Define campaign goals',owner:'Data Team Manager',priority:'Important',dueDate:'2026-04-25',done:true},
-      {id:'t5',text:'Draft creative brief',owner:'Data Analyst',priority:'Low',dueDate:'2026-05-05',done:false}
+      {id:'t4',text:'Define campaign goals',owner:'Manager',priority:'Important',dueDate:'2026-04-25',done:true},
+      {id:'t5',text:'Draft creative brief',owner:'Analyst',priority:'Low',dueDate:'2026-05-05',done:false}
     ]},
-  { id:'p3', name:'Data Pipeline Migration', status:'blocked', owner:'Data Team Manager',
+  { id:'p3', name:'Data Pipeline Migration', status:'blocked', owner:'Manager',
     stakeholders:['Aaron O.','Alfie S.'], startDate:'2026-01-15',
     completionDate:'', estCompletionDate:'2026-04-30', priority:'Urgent',
     blockers:'Missing access credentials for production DB. Awaiting IT approval.', progress:62,
     goals:'Migrate legacy ETL pipelines to the new cloud infrastructure to reduce latency and improve reliability.',
     sfCase:'SF-204819', projectGroup:'Excel to Power BI Migrations', rockRelated:true,
     todos:[
-      {id:'t6',text:'Audit current pipeline',owner:'Data Team Manager',priority:'Very Important',dueDate:'2026-02-01',done:true},
-      {id:'t7',text:'Set up staging environment',owner:'Data Analyst',priority:'Very Important',dueDate:'2026-02-15',done:true},
-      {id:'t8',text:'Request DB access from IT',owner:'Data Team Manager',priority:'Urgent',dueDate:'2026-04-24',done:false},
-      {id:'t9',text:'Migrate all tables',owner:'Data Analyst',priority:'Important',dueDate:'2026-04-28',done:false}
+      {id:'t6',text:'Audit current pipeline',owner:'Manager',priority:'Very Important',dueDate:'2026-02-01',done:true},
+      {id:'t7',text:'Set up staging environment',owner:'Analyst',priority:'Very Important',dueDate:'2026-02-15',done:true},
+      {id:'t8',text:'Request DB access from IT',owner:'Manager',priority:'Urgent',dueDate:'2026-04-24',done:false},
+      {id:'t9',text:'Migrate all tables',owner:'Analyst',priority:'Important',dueDate:'2026-04-28',done:false}
     ]}
 ];
 
@@ -629,6 +657,15 @@ const DEFAULT_PROJECTS = [
 /* ── Helpers ── */
 function uid() { return 'x'+Math.random().toString(36).slice(2,9); }
 function initials(n) { return (n||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase(); }
+function avatarClass(n) {
+  if ((n||'').toLowerCase().includes('manager')) return 'avatar-manager';
+  if ((n||'').toLowerCase().includes('analyst')) return 'avatar-analyst';
+  return '';
+}
+function avatarHtml(n, sm) {
+  const szCls = sm ? 'avatar avatar-sm' : 'avatar';
+  return `<span class="${szCls} ${avatarClass(n)}">${initials(n)}</span>`;
+}
 function fmtDate(d) {
   if(!d) return '—';
   return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
@@ -694,7 +731,7 @@ function renderMaster() {
     <div class="main-nav-tab active" onclick="goMaster()">Projects</div>
     <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
     <div class="main-nav-tab" onclick="goGoals()">Goals</div>
-    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
   </div>
@@ -769,7 +806,7 @@ function renderMaster() {
         <div class="meta-block">
           <div class="meta-label">Owner</div>
           <div class="owner-row" style="margin-top:2px">
-            <span class="avatar">${initials(p.owner)}</span>
+            ${avatarHtml(p.owner)}
             <span style="font-size:13px">${esc(p.owner||'—')}</span>
           </div>
         </div>
@@ -787,6 +824,7 @@ function renderMaster() {
         </div>
       </div>
       ${p.blockers?`<div class="blocker-notice"><div class="blocker-dot"></div><span>${esc(p.blockers)}</span></div>`:''}
+      ${p.notes?`<div style="font-size:12px;color:var(--text2);margin-top:8px;padding:7px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border);line-height:1.5;"><span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:3px;">Notes</span>${esc(p.notes)}</div>`:''}
     </div>`;
   }
 
@@ -900,7 +938,7 @@ function renderProject(id) {
         <div class="detail-field">
           <div class="field-label">Owner</div>
           <div class="owner-row" style="margin-top:4px">
-            <span class="avatar">${initials(p.owner)}</span>
+            ${avatarHtml(p.owner)}
             <span class="field-value">${esc(p.owner||'—')}</span>
           </div>
         </div>
@@ -945,6 +983,12 @@ function renderProject(id) {
       <div class="detail-card full">
         <div class="field-label" style="margin-bottom:8px">Blockers</div>
         ${p.blockers?`<div class="blocker-notice"><div class="blocker-dot"></div><span>${esc(p.blockers)}</span></div>`:`<div style="font-size:13px;color:var(--text3)">No blockers reported.</div>`}
+      </div>
+
+      <!-- Notes (full width) -->
+      <div class="detail-card full">
+        <div class="field-label" style="margin-bottom:8px">Notes</div>
+        ${p.notes?`<div style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;">${esc(p.notes)}</div>`:`<div style="font-size:13px;color:var(--text3)">No notes added.</div>`}
       </div>
 
       <!-- Goals (full width, dropdown linked to Goals tab) -->
@@ -1062,7 +1106,7 @@ function todoItemHtml(t, pid) {
     <div class="todo-meta">
       ${taskPriorityHtml(t.priority)}
       ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
-      ${t.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(t.owner)}</span>${esc(t.owner)}</div>`:''}
+      ${t.owner?`<div class="todo-owner">${avatarHtml(t.owner, true)}${esc(t.owner)}</div>`:''}
       <button class="btn btn-sm btn-edit btn-icon" onclick="openEditTodo('${pid}','${t.id}')" title="Edit task">✎</button>
       <button class="btn btn-sm btn-danger btn-icon" onclick="deleteTodo('${pid}','${t.id}')" title="Delete task">×</button>
     </div>
@@ -1088,7 +1132,7 @@ function renderAdHoc() {
     <div class="main-nav-tab" onclick="goMaster()">Projects</div>
     <div class="main-nav-tab active" onclick="goAdHoc()">Ad Hoc Tasks</div>
     <div class="main-nav-tab" onclick="goGoals()">Goals</div>
-    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
   </div>
@@ -1123,7 +1167,7 @@ function renderAdHoc() {
       <div class="todo-meta">
         ${taskPriorityHtml(t.priority)}
         ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
-        ${t.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(t.owner)}</span>${esc(t.owner)}</div>`:''}
+        ${t.owner?`<div class="todo-owner">${avatarHtml(t.owner, true)}${esc(t.owner)}</div>`:''}
         <button class="btn btn-sm btn-edit btn-icon" onclick="openEditAdHoc('${t.id}')" title="Edit">✎</button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="deleteAdHoc('${t.id}')" title="Delete">×</button>
       </div>
@@ -1225,7 +1269,7 @@ function renderGoals() {
       ${g.description?`<div class="goal-card-desc">${esc(g.description)}</div>`:''}
       <div class="goal-card-meta">
         ${g.deadline?`<span class="goal-deadline ${ds}"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v2M8 1v2M1 5h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>${dl}</span>`:''}
-        ${g.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(g.owner)}</span>${esc(g.owner)}</div>`:''}
+        ${g.owner?`<div class="todo-owner">${avatarHtml(g.owner, true)}${esc(g.owner)}</div>`:''}
       </div>
     </div>`;
   }
@@ -1245,7 +1289,7 @@ function renderGoals() {
     <div class="main-nav-tab" onclick="goMaster()">Projects</div>
     <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
     <div class="main-nav-tab active" onclick="goGoals()">Goals</div>
-    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
   </div>
@@ -1275,47 +1319,68 @@ function renderGoals() {
 }
 
 
-/* ── Manual Excel Reporting view ── */
+/* ── Legacy Report Tracking view ── */
 function renderExcel() {
-  const reports = state.excelReports || [];
+  const allReports = state.excelReports || [];
+  const excelView   = state.excelReportView || 'weekly';
+  const excelSort   = state.excelSort || 'none';
+  const hiddenCols  = state.excelHiddenCols || {};
+  const showOwner   = !hiddenCols.owner;
+  const showFreq    = !hiddenCols.frequency;
+  const showDayTime = !hiddenCols.dayTime;
 
-  // Build weeks for this year starting from current week
+  // Filter by view
+  const WEEKLY_FREQS  = ['Daily','Weekly','Bi-weekly'];
+  const MONTHLY_FREQS = ['Monthly','Quarterly'];
+  const reports = allReports.filter(r => {
+    if (excelView === 'weekly')  return !r.frequency || WEEKLY_FREQS.includes(r.frequency);
+    if (excelView === 'monthly') return MONTHLY_FREQS.includes(r.frequency);
+    return true;
+  });
+
+  // Sort
+  function sortedReports(arr) {
+    if (excelSort === 'dayTime') return [...arr].sort((a,b) => (a.dayTime||'').localeCompare(b.dayTime||''));
+    if (excelSort === 'owner')   return [...arr].sort((a,b) => (a.owner||'').localeCompare(b.owner||''));
+    if (excelSort === 'name')    return [...arr].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    return arr;
+  }
+
+  // Build week columns
   function getWeeks() {
     const weeks = [];
     const now = new Date();
-    // Start of current week (Monday)
     const startOfWeek = new Date(now);
     const day = startOfWeek.getDay();
-    const diff = (day === 0 ? -6 : 1 - day);
-    startOfWeek.setDate(startOfWeek.getDate() + diff);
+    startOfWeek.setDate(startOfWeek.getDate() + (day === 0 ? -6 : 1 - day));
     startOfWeek.setHours(0,0,0,0);
-    // End of year
-    const endOfYear = new Date(now.getFullYear(), 11, 31);
-    let cur = new Date(startOfWeek);
-    while (cur <= endOfYear) {
-      const mon = new Date(cur);
-      const sun = new Date(cur); sun.setDate(sun.getDate() + 6);
-      weeks.push({
-        key: mon.toISOString().slice(0,10),
-        label: (mon.getMonth()+1)+'/'+ mon.getDate(),
-        isFirst: weeks.length === 0
-      });
+    // Start 4 weeks before current week
+    const start = new Date(startOfWeek); start.setDate(start.getDate() - 28);
+    // End 4 weeks after current week
+    const end = new Date(startOfWeek); end.setDate(end.getDate() + 28);
+    let cur = new Date(start);
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0,10);
+      weeks.push({ key, label: (cur.getMonth()+1)+'/'+cur.getDate(), isFirst: key === startOfWeek.toISOString().slice(0,10) });
       cur.setDate(cur.getDate() + 7);
     }
     return weeks;
   }
 
-  const weeks = getWeeks();
-
-  function toggleWeekCheck(reportId, weekKey) {
-    const r = state.excelReports.find(x=>x.id===reportId);
-    if (!r) return;
-    if (!r.completions) r.completions = {};
-    r.completions[weekKey] = !r.completions[weekKey];
-    saveState();
-    render();
+  // Build month columns
+  function getMonths() {
+    const months = [];
+    const now = new Date();
+    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    for (let m = now.getMonth(); m < 12; m++) {
+      months.push({ key: now.getFullYear()+'-'+String(m+1).padStart(2,'0'), label: names[m], isFirst: m===now.getMonth() });
+    }
+    return months;
   }
-  window._toggleWeekCheck = toggleWeekCheck;
+
+  const cols     = excelView === 'monthly' ? getMonths() : getWeeks();
+  const colLabel = excelView === 'monthly' ? '← Scroll to see remaining months' : '← Scroll horizontally to see all weeks through end of year';
+  const thisLabel = excelView === 'monthly' ? 'THIS MONTH' : 'THIS WEEK';
 
   let html = `
   <div class="topbar">
@@ -1329,68 +1394,87 @@ function renderExcel() {
     <div class="main-nav-tab" onclick="goMaster()">Projects</div>
     <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
     <div class="main-nav-tab" onclick="goGoals()">Goals</div>
-    <div class="main-nav-tab active" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab active" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
   </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
     <div>
-      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Manual Excel Reporting</div>
-      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${reports.length} report${reports.length!==1?'s':''} tracked — check off each week when complete</div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Legacy Report Tracking</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${reports.length} of ${allReports.length} report${allReports.length!==1?'s':''} shown</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;border:1px solid var(--border2);border-radius:var(--radius-sm);overflow:hidden;">
+        <button class="sort-btn ${excelView==='weekly'?'active':''}" style="border:none;border-radius:0;border-right:1px solid var(--border2);" onclick="setExcelView('weekly')">Weekly Reports</button>
+        <button class="sort-btn ${excelView==='monthly'?'active':''}" style="border:none;border-radius:0;" onclick="setExcelView('monthly')">Monthly Reports</button>
+      </div>
+      <span class="board-controls-label" style="margin-left:4px;">Sort by:</span>
+      <button class="sort-btn ${excelSort==='none'?'active':''}"    onclick="setExcelSort('none')">Default</button>
+      <button class="sort-btn ${excelSort==='name'?'active':''}"    onclick="setExcelSort('name')">Name</button>
+      <button class="sort-btn ${excelSort==='owner'?'active':''}"   onclick="setExcelSort('owner')">Owner</button>
+      <button class="sort-btn ${excelSort==='dayTime'?'active':''}" onclick="setExcelSort('dayTime')">Day &amp; Time</button>
+      <span style="width:1px;height:18px;background:var(--border2);display:inline-block;margin:0 2px;"></span>
+      <span class="board-controls-label">Show:</span>
+      <button class="sort-btn ${showOwner?'active':''}"   onclick="toggleExcelCol('owner')">Owner</button>
+      <button class="sort-btn ${showFreq?'active':''}"    onclick="toggleExcelCol('frequency')">Frequency</button>
+      <button class="sort-btn ${showDayTime?'active':''}" onclick="toggleExcelCol('dayTime')">Day &amp; Time</button>
     </div>
   </div>`;
 
-  if (!reports.length) {
-    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:3rem;text-align:center;box-shadow:var(--shadow);"><div style="font-size:32px;margin-bottom:10px;opacity:0.4;">📊</div><div style="font-size:14px;color:var(--text3);">No reports yet. Add one above to start tracking.</div></div>`;
+  if (!allReports.length) {
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:3rem;text-align:center;box-shadow:var(--shadow);"><div style="font-size:32px;margin-bottom:10px;opacity:0.4;">&#128202;</div><div style="font-size:14px;color:var(--text3);">No reports yet. Add one above to start tracking.</div></div>`;
     return html;
   }
 
-  // Build table header
+  if (!reports.length) {
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:3rem;text-align:center;box-shadow:var(--shadow);"><div style="font-size:32px;margin-bottom:10px;opacity:0.4;">&#128202;</div><div style="font-size:14px;color:var(--text3);">No ${excelView} reports found. Add a report with a ${excelView === 'monthly' ? 'Monthly or Quarterly' : 'Daily, Weekly, or Bi-weekly'} frequency.</div></div>`;
+    return html;
+  }
+
+  // Table header
   let thead = `<thead><tr>
     <th style="position:sticky;left:0;z-index:3;background:var(--surface2);min-width:200px;">Report</th>
-    <th>Owner</th>
-    <th>Frequency</th>
-    <th>Day &amp; Time</th>`;
-  weeks.forEach(w => {
-    thead += `<th class="week-col${w.isFirst?' current-week':''}">
-      ${w.isFirst?'<span style="font-size:9px;display:block;color:var(--accent);margin-bottom:1px;">THIS WEEK</span>':''}
-      ${w.label}
+    ${showOwner   ? '<th>Owner</th>'          : ''}
+    ${showFreq    ? '<th>Frequency</th>'      : ''}
+    ${showDayTime ? '<th>Day &amp; Time</th>' : ''}`;
+  cols.forEach(c => {
+    thead += `<th class="week-col${c.isFirst?' current-week':''}">
+      ${c.isFirst?`<span style="font-size:9px;display:block;color:var(--accent);margin-bottom:1px;">${thisLabel}</span>`:''}
+      ${c.label}
     </th>`;
   });
-  thead += `</tr></thead>`;
+  thead += `<th></th></tr></thead>`;
 
-  // Build table rows
+  // Table rows
   let tbody = '<tbody>';
-  reports.forEach(r => {
+  sortedReports(reports).forEach(r => {
     tbody += `<tr>
       <td style="position:sticky;left:0;background:var(--surface);z-index:1;">
         <div class="report-name-cell">${esc(r.name)}</div>
         ${r.notes?`<div class="report-meta">${esc(r.notes)}</div>`:''}
       </td>
-      <td>
-        ${r.owner?`<div style="display:flex;align-items:center;gap:6px;"><span class="avatar avatar-sm">${initials(r.owner)}</span><span style="font-size:13px;">${esc(r.owner)}</span></div>`:'<span style="color:var(--text3)">—</span>'}
-      </td>
-      <td><span class="freq-badge">${esc(r.frequency||'—')}</span></td>
-      <td style="font-size:13px;color:var(--text2);white-space:nowrap;">${esc(r.dayTime||'—')}</td>`;
-    weeks.forEach(w => {
-      const done = !!(r.completions && r.completions[w.key]);
+      ${showOwner   ? `<td><div style="display:flex;align-items:center;gap:6px;">${r.owner ? avatarHtml(r.owner, true)+'<span style="font-size:13px;">'+esc(r.owner)+'</span>' : '<span style="color:var(--text3)">&#8212;</span>'}</div></td>` : ''}
+      ${showFreq    ? `<td><span class="freq-badge">${esc(r.frequency||'&#8212;')}</span></td>` : ''}
+      ${showDayTime ? `<td style="font-size:13px;color:var(--text2);white-space:nowrap;">${esc(r.dayTime||'&#8212;')}</td>` : ''}`;
+    cols.forEach(c => {
+      const done = !!(r.completions && r.completions[c.key]);
       tbody += `<td class="week-cell">
-        <div class="week-check ${done?'done':''}" onclick="toggleWeekCheck('${r.id}','${w.key}')">
+        <div class="week-check ${done?'done':''}" onclick="toggleWeekCheck('${r.id}','${c.key}')">
           ${done?`<svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
         </div>
       </td>`;
     });
     tbody += `<td style="white-space:nowrap;">
       <div style="display:flex;gap:6px;">
-        <button class="btn btn-sm btn-edit btn-icon" onclick="openEditExcelReport('${r.id}')" title="Edit">✎</button>
-        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteExcelReport('${r.id}')" title="Delete">×</button>
+        <button class="btn btn-sm btn-edit btn-icon" onclick="openEditExcelReport('${r.id}')" title="Edit">&#9998;</button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteExcelReport('${r.id}')" title="Delete">&#215;</button>
       </div>
     </td></tr>`;
   });
   tbody += '</tbody>';
 
   html += `<div class="excel-table-wrap"><table class="excel-table">${thead}${tbody}</table></div>`;
-  html += `<div style="font-size:11px;color:var(--text3);margin-top:8px;">← Scroll horizontally to see all weeks through end of year</div>`;
+  html += `<div style="font-size:11px;color:var(--text3);margin-top:8px;">${colLabel}</div>`;
   return html;
 }
 
@@ -1441,7 +1525,7 @@ function renderTraining() {
     <div class="main-nav-tab" onclick="goMaster()">Projects</div>
     <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
     <div class="main-nav-tab" onclick="goGoals()">Goals</div>
-    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab active" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
   </div>
@@ -1495,7 +1579,7 @@ function renderTraining() {
               <div class="training-todo-text ${t.done?'done':''}">${esc(t.text)}</div>
               <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;">
                 ${t.dueDate?`<span class="todo-due ${ov?'overdue':''}">${ov?'Overdue · ':''}${fmtDate(t.dueDate)}</span>`:''}
-                ${t.owner?`<div class="todo-owner"><span class="avatar avatar-sm">${initials(t.owner)}</span>${esc(t.owner)}</div>`:''}
+                ${t.owner?`<div class="todo-owner">${avatarHtml(t.owner, true)}${esc(t.owner)}</div>`:''}
                 <button class="btn btn-sm btn-edit btn-icon" onclick="openEditTrainingTodo('${tr.id}','${t.id}')" title="Edit">✎</button>
                 <button class="btn btn-sm btn-danger btn-icon" onclick="deleteTrainingTodo('${tr.id}','${t.id}')">×</button>
               </div>
@@ -1570,7 +1654,7 @@ function renderMasterTodos() {
     <div class="main-nav-tab" onclick="goMaster()">Projects</div>
     <div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div>
     <div class="main-nav-tab" onclick="goGoals()">Goals</div>
-    <div class="main-nav-tab" onclick="goExcel()">Manual Excel Reporting</div>
+    <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab active" onclick="goMasterTodos()">Master To Dos</div>
   </div>
@@ -1602,7 +1686,7 @@ function renderMasterTodos() {
 
     html += `<div class="member-section">
       <div class="member-header">
-        <span class="member-avatar">${initials(owner)}</span>
+        <span class="member-avatar ${avatarClass(owner)}">${initials(owner)}</span>
         <span class="member-name">${esc(owner)}</span>
         <span class="member-task-count">${openCount} open · ${tasks.length} total</span>
       </div>
@@ -1654,6 +1738,9 @@ function toggleGroupCollapse(key) { state.collapsedGroups[key]=!state.collapsedG
 function goAdHoc() { state.view='adhoc'; render(); }
 function goGoals() { state.view='goals'; render(); }
 function goExcel() { state.view='excel'; render(); }
+function setExcelView(v) { state.excelReportView=v; render(); }
+function setExcelSort(v) { state.excelSort=v; render(); }
+function toggleExcelCol(col) { if(!state.excelHiddenCols) state.excelHiddenCols={}; state.excelHiddenCols[col]=!state.excelHiddenCols[col]; render(); }
 function goTraining() { state.view='training'; render(); }
 function goMasterTodos() { state.view='mastertodos'; render(); }
 function toggleTrainingExpand(id) { state.expandedTraining = state.expandedTraining===id?null:id; render(); }
@@ -1848,7 +1935,10 @@ function saveNewTrainingTodo(tid) {
   const text=document.getElementById('trt-text').value.trim(); if(!text) return;
   const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
   if(!tr.todos) tr.todos=[];
-  tr.todos.push({ id:uid(), text, owner:document.getElementById('trt-owner').value, dueDate:document.getElementById('trt-due').value, done:false });
+  const newTask = { id:uid(), text, owner:document.getElementById('trt-owner').value, dueDate:document.getElementById('trt-due').value, done:false };
+  tr.todos.push(newTask);
+  const notif = buildNotification(newTask, 'training', tr.name);
+  if (notif) { if(!state._pendingTrainingNotify) state._pendingTrainingNotify=[]; state._pendingTrainingNotify.push(notif); }
   closeModal(); saveState(); render();
 }
 function openEditTrainingTodo(tid, todoId) {
@@ -1860,7 +1950,13 @@ function saveEditTrainingTodo(tid, todoId) {
   const text=document.getElementById('trt-text').value.trim(); if(!text) return;
   const tr=state.trainings.find(x=>x.id===tid); if(!tr) return;
   const t=tr.todos.find(x=>x.id===todoId); if(!t) return;
+  const prevOwner = t.owner;
   t.text=text; t.owner=document.getElementById('trt-owner').value; t.dueDate=document.getElementById('trt-due').value;
+  if (t.owner && t.owner !== prevOwner) {
+    _notifiedIds.delete(t.id + '::' + t.owner);
+    const notif = buildNotification(t, 'training', tr.name);
+    if (notif) { if(!state._pendingTrainingNotify) state._pendingTrainingNotify=[]; state._pendingTrainingNotify.push(notif); }
+  }
   closeModal(); saveState(); render();
 }
 function toggleTrainingTodo(tid, todoId) {
@@ -1958,6 +2054,7 @@ function projectFormHtml(title, saveCall, p) {
       <select id="pf-stakeholders" multiple>${stakeholderOpts(d.stakeholders||[])}</select>
     </div>
     <div class="form-group"><label class="form-label">Blockers</label><textarea id="pf-blockers" placeholder="Describe any current blockers...">${esc(d.blockers||'')}</textarea></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea id="pf-notes" placeholder="Any additional notes...">${esc(d.notes||'')}</textarea></div>
     <div class="form-group">
       <label class="form-checkbox-row" onclick="document.getElementById('pf-rock').click()">
         <input type="checkbox" id="pf-rock" ${d.rockRelated?'checked':''} onclick="event.stopPropagation()">
@@ -1974,7 +2071,7 @@ function openNewProject() { openModal(projectFormHtml('New project','saveNewProj
 function saveNewProject() {
   const name=document.getElementById('pf-name').value.trim();
   if(!name){ document.getElementById('pf-name').focus(); return; }
-  state.projects.push({ id:uid(), name, status:document.getElementById('pf-status').value, owner:document.getElementById('pf-owner').value, priority:document.getElementById('pf-priority').value, stakeholders:getMulti('pf-stakeholders'), startDate:document.getElementById('pf-start').value, completionDate:document.getElementById('pf-done').value, estCompletionDate:document.getElementById('pf-est').value, blockers:document.getElementById('pf-blockers').value.trim(), progress:Math.min(100,Math.max(0,parseInt(document.getElementById('pf-pct').value)||0)), projectGroup:document.getElementById('pf-group').value, rockRelated:document.getElementById('pf-rock').checked, goals:'', sfCase:'', todos:[] });
+  state.projects.push({ id:uid(), name, status:document.getElementById('pf-status').value, owner:document.getElementById('pf-owner').value, priority:document.getElementById('pf-priority').value, stakeholders:getMulti('pf-stakeholders'), startDate:document.getElementById('pf-start').value, completionDate:document.getElementById('pf-done').value, estCompletionDate:document.getElementById('pf-est').value, blockers:document.getElementById('pf-blockers').value.trim(), notes:document.getElementById('pf-notes').value.trim(), progress:Math.min(100,Math.max(0,parseInt(document.getElementById('pf-pct').value)||0)), projectGroup:document.getElementById('pf-group').value, rockRelated:document.getElementById('pf-rock').checked, goals:'', sfCase:'', todos:[] });
   closeModal(); saveState(); render();
 }
 function editProject(id) {
@@ -1985,7 +2082,7 @@ function saveEditProject(id) {
   const p=state.projects.find(x=>x.id===id);
   const name=document.getElementById('pf-name').value.trim();
   if(!name) return;
-  p.name=name; p.status=document.getElementById('pf-status').value; p.owner=document.getElementById('pf-owner').value; p.priority=document.getElementById('pf-priority').value; p.stakeholders=getMulti('pf-stakeholders'); p.startDate=document.getElementById('pf-start').value; p.estCompletionDate=document.getElementById('pf-est').value; p.completionDate=document.getElementById('pf-done').value; p.blockers=document.getElementById('pf-blockers').value.trim(); p.progress=Math.min(100,Math.max(0,parseInt(document.getElementById('pf-pct').value)||0)); p.projectGroup=document.getElementById('pf-group').value; p.rockRelated=document.getElementById('pf-rock').checked;
+  p.name=name; p.status=document.getElementById('pf-status').value; p.owner=document.getElementById('pf-owner').value; p.priority=document.getElementById('pf-priority').value; p.stakeholders=getMulti('pf-stakeholders'); p.startDate=document.getElementById('pf-start').value; p.estCompletionDate=document.getElementById('pf-est').value; p.completionDate=document.getElementById('pf-done').value; p.blockers=document.getElementById('pf-blockers').value.trim(); p.notes=document.getElementById('pf-notes').value.trim(); p.progress=Math.min(100,Math.max(0,parseInt(document.getElementById('pf-pct').value)||0)); p.projectGroup=document.getElementById('pf-group').value; p.rockRelated=document.getElementById('pf-rock').checked;
   closeModal(); saveState(); render();
 }
 
@@ -2010,7 +2107,10 @@ function openNewAdHoc() { openModal(adHocForm('Add task','saveNewAdHoc()',null))
 function saveNewAdHoc() {
   const text=document.getElementById('ah-text').value.trim(); if(!text) return;
   if(!state.adHocTasks) state.adHocTasks=[];
-  state.adHocTasks.push({ id:uid(), text, notes:document.getElementById('ah-notes').value.trim(), owner:document.getElementById('ah-owner').value, priority:document.getElementById('ah-priority').value, dueDate:document.getElementById('ah-due').value, done:false });
+  const newTask = { id:uid(), text, notes:document.getElementById('ah-notes').value.trim(), owner:document.getElementById('ah-owner').value, priority:document.getElementById('ah-priority').value, dueDate:document.getElementById('ah-due').value, done:false };
+  state.adHocTasks.push(newTask);
+  const notif = buildNotification(newTask, 'adhoc', 'Ad Hoc');
+  if (notif) { if(!state._pendingAdHocNotify) state._pendingAdHocNotify=[]; state._pendingAdHocNotify.push(notif); }
   closeModal(); render(); saveAdHocTasks();
 }
 function openEditAdHoc(tid) {
@@ -2022,7 +2122,13 @@ function saveEditAdHoc(tid) {
   const text=document.getElementById('ah-text').value.trim(); if(!text) return;
   const t=state.adHocTasks.find(x=>x.id===tid);
   if(!t) return;
+  const prevOwner = t.owner;
   t.text=text; t.notes=document.getElementById('ah-notes').value.trim(); t.owner=document.getElementById('ah-owner').value; t.priority=document.getElementById('ah-priority').value; t.dueDate=document.getElementById('ah-due').value;
+  if (t.owner && t.owner !== prevOwner) {
+    _notifiedIds.delete(t.id + '::' + t.owner);
+    const notif = buildNotification(t, 'adhoc', 'Ad Hoc');
+    if (notif) { if(!state._pendingAdHocNotify) state._pendingAdHocNotify=[]; state._pendingAdHocNotify.push(notif); }
+  }
   closeModal(); render(); saveAdHocTasks();
 }
 
@@ -2046,7 +2152,10 @@ function openNewTodo(pid) { openModal(todoForm('Add task',`saveNewTodo('${pid}')
 function saveNewTodo(pid) {
   const text=document.getElementById('td-text').value.trim(); if(!text) return;
   const p=state.projects.find(x=>x.id===pid);
-  p.todos.push({ id:uid(), text, owner:document.getElementById('td-owner').value, priority:document.getElementById('td-priority').value, dueDate:document.getElementById('td-due').value, done:false });
+  const newTask = { id:uid(), text, owner:document.getElementById('td-owner').value, priority:document.getElementById('td-priority').value, dueDate:document.getElementById('td-due').value, done:false };
+  p.todos.push(newTask);
+  const notif = buildNotification(newTask, 'project', p.name);
+  if (notif) { if(!state._pendingNotify) state._pendingNotify=[]; state._pendingNotify.push(notif); }
   closeModal(); saveState(); render();
 }
 function openEditTodo(pid,tid) {
@@ -2056,7 +2165,14 @@ function openEditTodo(pid,tid) {
 function saveEditTodo(pid,tid) {
   const text=document.getElementById('td-text').value.trim(); if(!text) return;
   const p=state.projects.find(x=>x.id===pid), t=p.todos.find(x=>x.id===tid);
+  const prevOwner = t.owner;
   t.text=text; t.owner=document.getElementById('td-owner').value; t.priority=document.getElementById('td-priority').value; t.dueDate=document.getElementById('td-due').value;
+  // Notify if owner changed to someone new
+  if (t.owner && t.owner !== prevOwner) {
+    _notifiedIds.delete(t.id + '::' + t.owner); // allow re-notify for new owner
+    const notif = buildNotification(t, 'project', p.name);
+    if (notif) { if(!state._pendingNotify) state._pendingNotify=[]; state._pendingNotify.push(notif); }
+  }
   closeModal(); saveState(); render();
 }
 
