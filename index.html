@@ -316,6 +316,7 @@
 
 /* ── Sync state ── */
 let syncing = false;
+let pendingSave = false;
 
 function showToast(msg, isError) {
   const t = document.getElementById('sync-toast');
@@ -366,7 +367,7 @@ function rowsToProjects(rows) {
     return {
       id: o.id, name: o.name, status: o.status, owner: o.owner,
       priority: o.priority, projectGroup: o.projectGroup,
-      rockRelated: o.rockRelated === 'true',
+      rockRelated: parseBool(o.rockRelated),
       progress: parseInt(o.progress)||0,
       startDate: o.startDate, estCompletionDate: o.estCompletionDate,
       completionDate: o.completionDate,
@@ -395,7 +396,7 @@ function rowsToTodos(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:o.done==='true' };
+    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:parseBool(o.done) };
   }).filter(t => t.id);
 }
 
@@ -406,13 +407,15 @@ function todosToRows(todos) {
   return rows;
 }
 
+function parseBool(v) { return v === true || v === 'true' || v === 'TRUE'; }
+
 function rowsToAdHoc(rows) {
   if (!rows.length) return [];
   const [hdr, ...data] = rows;
   return data.map(r => {
     const o = {};
-    hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, text:o.text, notes:o.notes, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:o.done==='true' };
+    hdr.forEach((h,i) => o[h] = r[i] !== undefined ? r[i] : '');
+    return { id:o.id, text:o.text, notes:o.notes, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:parseBool(o.done) };
   }).filter(t => t.id);
 }
 
@@ -429,7 +432,7 @@ function rowsToGoals(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:o.deadline, achieved:o.achieved==='true' };
+    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:o.deadline, achieved:parseBool(o.achieved) };
   }).filter(g => g.id);
 }
 
@@ -482,7 +485,7 @@ function rowsToTrainingTodos(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, trainingId:o.trainingId, text:o.text, owner:o.owner, dueDate:o.dueDate, done:o.done==='true' };
+    return { id:o.id, trainingId:o.trainingId, text:o.text, owner:o.owner, dueDate:o.dueDate, done:parseBool(o.done) };
   }).filter(t => t.id);
 }
 
@@ -534,8 +537,9 @@ async function loadState() {
 
 /* ── Save all state to Google Sheets ── */
 async function saveState() {
-  if (syncing) return;
+  if (syncing) { pendingSave = true; return; }
   syncing = true;
+  pendingSave = false;
   showSyncBar();
   try {
     // Flatten todos with projectId
@@ -563,6 +567,7 @@ async function saveState() {
     showToast('Save failed — check Apps Script deployment', true);
   }
   syncing = false;
+  if (pendingSave) { pendingSave = false; saveState(); }
 }
 
 const OWNER_OPTIONS = ['Data Team Manager', 'Data Analyst'];
@@ -1655,12 +1660,27 @@ function toggleTrainingExpand(id) { state.expandedTraining = state.expandedTrain
 function setAdHocGroup(v) { state.adHocGroup=v; render(); }
 function toggleAdHoc(tid) {
   const t=state.adHocTasks.find(x=>x.id===tid);
-  if(t) { t.done=!t.done; saveState(); render(); }
+  if(!t) return;
+  t.done=!t.done;
+  render();
+  saveAdHocTasks();
+}
+
+async function saveAdHocTasks() {
+  try {
+    showSyncBar();
+    await sheetsUpdate('AdHocTasks', adHocToRows(state.adHocTasks||[]));
+    showToast('Saved ✓', false);
+  } catch(e) {
+    console.error('AdHocTasks save error:', e);
+    showToast('Save failed — AdHoc task not saved', true);
+  }
 }
 function deleteAdHoc(tid) {
   openConfirm('Delete this task? This cannot be undone.', function() {
     state.adHocTasks=state.adHocTasks.filter(x=>x.id!==tid);
-    saveState(); render();
+    render();
+    saveAdHocTasks();
   });
 }
 
@@ -1991,7 +2011,7 @@ function saveNewAdHoc() {
   const text=document.getElementById('ah-text').value.trim(); if(!text) return;
   if(!state.adHocTasks) state.adHocTasks=[];
   state.adHocTasks.push({ id:uid(), text, notes:document.getElementById('ah-notes').value.trim(), owner:document.getElementById('ah-owner').value, priority:document.getElementById('ah-priority').value, dueDate:document.getElementById('ah-due').value, done:false });
-  closeModal(); saveState(); render();
+  closeModal(); render(); saveAdHocTasks();
 }
 function openEditAdHoc(tid) {
   const t=state.adHocTasks.find(x=>x.id===tid);
@@ -2003,7 +2023,7 @@ function saveEditAdHoc(tid) {
   const t=state.adHocTasks.find(x=>x.id===tid);
   if(!t) return;
   t.text=text; t.notes=document.getElementById('ah-notes').value.trim(); t.owner=document.getElementById('ah-owner').value; t.priority=document.getElementById('ah-priority').value; t.dueDate=document.getElementById('ah-due').value;
-  closeModal(); saveState(); render();
+  closeModal(); render(); saveAdHocTasks();
 }
 
 /* ── New / Edit Task ── */
