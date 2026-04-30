@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Data Team Project Board</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -458,14 +457,14 @@ function rowsToGoals(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:o.deadline, achieved:parseBool(o.achieved), isRock:parseBool(o.isRock), quarter:o.quarter||'', smartS:o.smartS||'', smartM:o.smartM||'', smartA:o.smartA||'', smartR:o.smartR||'', smartT:o.smartT||'' };
+    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:o.deadline, achieved:parseBool(o.achieved) };
   }).filter(g => g.id);
 }
 
 function goalsToRows(goals) {
-  const hdr = ['id','title','description','owner','deadline','achieved','isRock','quarter','smartS','smartM','smartA','smartR','smartT'];
+  const hdr = ['id','title','description','owner','deadline','achieved'];
   const rows = [hdr];
-  goals.forEach(g => rows.push([g.id, g.title||'', g.description||'', g.owner||'', g.deadline||'', String(!!g.achieved), String(!!g.isRock), g.quarter||'', g.smartS||'', g.smartM||'', g.smartA||'', g.smartR||'', g.smartT||'']));
+  goals.forEach(g => rows.push([g.id, g.title||'', g.description||'', g.owner||'', g.deadline||'', String(!!g.achieved)]));
   return rows;
 }
 
@@ -526,7 +525,7 @@ function trainingTodosToRows(todos) {
 async function loadState() {
   showToast('Loading data…', false);
   try {
-    const [projRows, todoRows, adHocRows, goalRows, excelRows, trainRows, trainTodoRows, timeLogRows] = await Promise.all([
+    const [projRows, todoRows, adHocRows, goalRows, excelRows, trainRows, trainTodoRows] = await Promise.all([
       sheetsGet('Projects'),
       sheetsGet('Todos'),
       sheetsGet('AdHocTasks'),
@@ -534,7 +533,6 @@ async function loadState() {
       sheetsGet('ExcelReports'),
       sheetsGet('Trainings'),
       sheetsGet('TrainingTodos'),
-      sheetsGet('TimeLog'),
     ]);
 
     state.projects = rowsToProjects(projRows);
@@ -548,11 +546,6 @@ async function loadState() {
     state.adHocTasks = rowsToAdHoc(adHocRows);
     state.teamGoals  = rowsToGoals(goalRows);
     state.excelReports = rowsToExcelReports(excelRows);
-
-    // Load today's time log entries
-    const todayStr = new Date().toLocaleDateString();
-    const allTimeLog = rowsToTimeLog(timeLogRows);
-    tt.entries = allTimeLog.filter(function(e){ return new Date(e.startTime).toLocaleDateString() === todayStr; });
 
     const allTrainings = rowsToTrainings(trainRows);
     const allTrainTodos = rowsToTrainingTodos(trainTodoRows);
@@ -600,7 +593,6 @@ async function saveState() {
       sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])),
       sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]),
       sheetsUpdate('ProjectGroups', [['name'], ...(state.projectGroups||[]).map(g=>[g])]),
-      sheetsUpdate('TimeLog', timeLogToRows(tt.entries)),
     ]);
     state._pendingNotify = [];
     state._pendingAdHocNotify = [];
@@ -722,7 +714,7 @@ function checkSvg() { return `<svg width="11" height="9" viewBox="0 0 11 9" fill
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 /* ── Render ── */
-function render() { document.getElementById('root').innerHTML = state.view==='master'?renderMaster():state.view==='adhoc'?renderAdHoc():state.view==='goals'?renderGoals():state.view==='excel'?renderExcel():state.view==='training'?renderTraining():state.view==='mastertodos'?renderMasterTodos():state.view==='timetracker'?renderTimeTracker():renderProject(state.activeProject); }
+function render() { document.getElementById('root').innerHTML = state.view==='master'?renderMaster():state.view==='adhoc'?renderAdHoc():state.view==='goals'?renderGoals():state.view==='excel'?renderExcel():state.view==='training'?renderTraining():state.view==='mastertodos'?renderMasterTodos():renderProject(state.activeProject); }
 
 /* ── Master board ── */
 function renderMaster() {
@@ -753,7 +745,6 @@ function renderMaster() {
     <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
-    <div class="main-nav-tab" onclick="goTimeTracker()">Time Tracker</div>
   </div>
   <div class="metrics">
     <div class="metric"><div class="metric-label">Total projects</div><div class="metric-value">${total}</div></div>
@@ -1167,7 +1158,6 @@ function renderAdHoc() {
     <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
-    <div class="main-nav-tab" onclick="goTimeTracker()">Time Tracker</div>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
     <div>
@@ -1302,26 +1292,13 @@ function renderGoals() {
           <div class="goal-card-title ${g.achieved?'achieved':''}">${esc(g.title)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          ${g.isRock ? '<span style="font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;background:#FAEEDA;color:#633806;white-space:nowrap;">🪨 Rock</span>' : ''}${g.isRock && g.quarter ? '<span style="font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;background:#FEF3E2;color:#B45309;white-space:nowrap;margin-left:4px;">' + esc(g.quarter) + '</span>' : ''}${g.achieved?'<span class="goal-achieved-badge"><svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#1a6b4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Achieved</span>':''}
+          ${g.achieved?'<span class="goal-achieved-badge"><svg width="11" height="9" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#1a6b4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Achieved</span>':''}
           <button class="btn btn-sm ${g.achieved?'btn-edit':'btn-primary'}" onclick="toggleGoalAchieved('${g.id}')">${g.achieved?'Reopen':'Mark achieved'}</button>
           <button class="btn btn-sm btn-edit btn-icon" onclick="openEditGoal('${g.id}')" title="Edit">✎</button>
           <button class="btn btn-sm btn-danger btn-icon" onclick="deleteGoal('${g.id}')" title="Delete">×</button>
         </div>
       </div>
       ${g.description?`<div class="goal-card-desc">${esc(g.description)}</div>`:''}
-      ${g.isRock && (g.smartS||g.smartM||g.smartA||g.smartR||g.smartT) ? `
-      <div>
-        <button onclick="(function(btn){var s=btn.closest('.goal-card').querySelector('.smart-body');var shown=s.style.display!=='none';s.style.display=shown?'none':'flex';btn.textContent=shown?'Show S.M.A.R.T. ▸':'Hide S.M.A.R.T. ▾';})(this)" style="font-size:11px;font-weight:600;color:#1a5c2a;background:#D4EDDA;border:1px solid #81C78450;border-radius:100px;padding:3px 10px;cursor:pointer;margin-bottom:8px;">Hide S.M.A.R.T. ▾</button>
-        <div class="smart-body" style="display:flex;flex-direction:column;gap:8px;">
-        ${[['S','Specific',g.smartS],['M','Measurable',g.smartM],['A','Attainable',g.smartA],['R','Relevant',g.smartR],['T','Timely',g.smartT]].filter(x=>x[2]).map(([letter,label,val])=>`
-        <div style="background:#E8F5E950;border:1px solid #81C78450;border-radius:6px;padding:8px 10px;">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;background:#2E7D32;color:#fff;border-radius:50%;font-size:10px;font-weight:700;flex-shrink:0;">${letter}</span>
-            <span style="font-size:11px;font-weight:600;color:#633806;text-transform:uppercase;letter-spacing:0.05em;">${label}</span>
-          </div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.5;">${esc(val)}</div>
-        </div>`).join('')}
-      </div></div>` : ''}
       <div class="goal-card-meta">
         ${g.deadline?`<span class="goal-deadline ${ds}"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v2M8 1v2M1 5h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>${dl}</span>`:''}
         ${g.owner?`<div class="todo-owner">${avatarHtml(g.owner, true)}${esc(g.owner)}</div>`:''}
@@ -1329,38 +1306,8 @@ function renderGoals() {
     </div>`;
   }
 
-  const rocks = goals.filter(g=>g.isRock);
-  const otherGoals = goals.filter(g=>!g.isRock);
-  const rocksOpen = rocks.filter(g=>!g.achieved);
-  const rocksDone = rocks.filter(g=>g.achieved);
-  const othersOpen = otherGoals.filter(g=>!g.achieved);
-  const othersDone = otherGoals.filter(g=>g.achieved);
-
-  function sectionHtml(label, icon, openItems, doneItems, emptyMsg, accentColor) {
-    const total = openItems.length + doneItems.length;
-    const achievedCount = doneItems.length;
-    let s = '<div style="margin-bottom:32px;">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid ' + accentColor + '40;">'
-      + '<div style="display:flex;align-items:center;gap:10px;">'
-      + '<span style="font-size:20px;">' + icon + '</span>'
-      + '<div><div style="font-size:16px;font-weight:700;color:var(--text);letter-spacing:-0.01em;">' + label + '</div>'
-      + '<div style="font-size:12px;color:var(--text3);margin-top:1px;">' + achievedCount + ' of ' + total + ' achieved</div></div>'
-      + '</div></div>';
-    if (!total) {
-      s += '<div style="padding:1.5rem;text-align:center;color:var(--text3);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);">' + emptyMsg + '</div>';
-    } else {
-      if (openItems.length) {
-        s += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;">In progress (' + openItems.length + ')</div>';
-        s += '<div class="goals-grid">' + openItems.map(goalCardHtml).join('') + '</div>';
-      }
-      if (doneItems.length) {
-        s += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:' + (openItems.length ? '20px' : '0') + ';margin-bottom:10px;">Achieved (' + doneItems.length + ')</div>';
-        s += '<div class="goals-grid">' + doneItems.map(goalCardHtml).join('') + '</div>';
-      }
-    }
-    s += '</div>';
-    return s;
-  }
+  const open = goals.filter(g=>!g.achieved);
+  const done = goals.filter(g=>g.achieved);
 
   let html = `
   <div class="topbar">
@@ -1377,11 +1324,10 @@ function renderGoals() {
     <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
-    <div class="main-nav-tab" onclick="goTimeTracker()">Time Tracker</div>
   </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
     <div>
-      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Goals &amp; Rocks</div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Team Goals</div>
       <div style="font-size:13px;color:var(--text3);margin-top:2px;">${achieved} of ${goals.length} achieved</div>
     </div>
   </div>`;
@@ -1391,8 +1337,15 @@ function renderGoals() {
     return html;
   }
 
-  html += sectionHtml('Rocks', '\u1FAA8', rocksOpen, rocksDone, 'No rocks defined yet. Add a goal and check "This is a Rock".', '#EF9F27');
-  html += sectionHtml('Other Goals', '\u1F3AF', othersOpen, othersDone, 'No other goals defined yet. Add a goal above.', '#1a6b4a');
+  if (open.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;">In progress (${open.length})</div>`;
+    html += `<div class="goals-grid">${open.map(goalCardHtml).join('')}</div>`;
+  }
+
+  if (done.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:${open.length?'24px':'0'};margin-bottom:10px;">Achieved (${done.length})</div>`;
+    html += `<div class="goals-grid">${done.map(goalCardHtml).join('')}</div>`;
+  }
 
   return html;
 }
@@ -1476,7 +1429,6 @@ function renderExcel() {
     <div class="main-nav-tab active" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
-    <div class="main-nav-tab" onclick="goTimeTracker()">Time Tracker</div>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
     <div>
@@ -1608,7 +1560,6 @@ function renderTraining() {
     <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab active" onclick="goTraining()">Training</div>
     <div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div>
-    <div class="main-nav-tab" onclick="goTimeTracker()">Time Tracker</div>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
     <div>
@@ -1739,7 +1690,6 @@ function renderMasterTodos() {
     <div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div>
     <div class="main-nav-tab" onclick="goTraining()">Training</div>
     <div class="main-nav-tab active" onclick="goMasterTodos()">Master To Dos</div>
-    <div class="main-nav-tab" onclick="goTimeTracker()">Time Tracker</div>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
     <div>
@@ -1834,7 +1784,6 @@ function setExcelSort(v) { state.excelSort=v; render(); }
 function toggleExcelCol(col) { if(!state.excelHiddenCols) state.excelHiddenCols={}; state.excelHiddenCols[col]=!state.excelHiddenCols[col]; render(); }
 function goTraining() { state.view='training'; render(); }
 function goMasterTodos() { state.view='mastertodos'; render(); }
-function goTimeTracker() { state.view='timetracker'; render(); setTimeout(function(){ ttRenderLog(); if(tt.running){var d=document.getElementById('tt-display');if(d){d.textContent=ttFmtSec(tt.elapsed);d.classList.add('tt-running');}} }, 50); }
 function toggleTrainingExpand(id) { state.expandedTraining = state.expandedTraining===id?null:id; render(); }
 function setFilterOwner(v) { state.filterOwner=v; render(); }
 function toggleHideCompleteAdHoc() { state.hideCompleteAdHoc=!state.hideCompleteAdHoc; render(); }
@@ -1949,15 +1898,6 @@ function goalForm(title, saveCall, g) {
     <div class="form-grid2">
       <div class="form-group"><label class="form-label">Owner</label><select id="gf-owner">${ownerOpts(d.owner||'')}</select></div>
       <div class="form-group"><label class="form-label">Deadline</label><input type="date" id="gf-deadline" value="${d.deadline||''}"></div>
-      <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);"><input type="checkbox" id="gf-isrock" ${d.isRock?'checked':''} onchange="document.getElementById('gf-smart-section').style.display=this.checked?'block':'none'" style="width:15px;height:15px;accent-color:#EF9F27;cursor:pointer;"> <span>This is a Rock</span></label><div style="font-size:11px;color:var(--text3);margin-top:4px;margin-left:23px;">Rocks appear in the Time Tracker for time tracking</div></div>
-      <div id="gf-smart-section" style="display:${d.isRock?'block':'none'};background:#E8F5E930;border:1px solid #81C78440;border-radius:8px;padding:14px 16px;margin-top:4px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><div style="font-size:12px;font-weight:700;color:#1a5c2a;text-transform:uppercase;letter-spacing:0.07em;">S.M.A.R.T. Criteria</div><div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;font-weight:500;color:#633806;white-space:nowrap;">Quarter</label><select id="gf-quarter" style="font-size:13px;border:1px solid #EF9F2780;border-radius:6px;padding:4px 10px;background:#fff;color:var(--text);"><option value="">— Select —</option><option value="Q1, 2026"${d.quarter==='Q1, 2026'?' selected':''}>Q1, 2026</option><option value="Q2, 2026"${d.quarter==='Q2, 2026'?' selected':''}>Q2, 2026</option><option value="Q3, 2026"${d.quarter==='Q3, 2026'?' selected':''}>Q3, 2026</option><option value="Q4, 2026"${d.quarter==='Q4, 2026'?' selected':''}>Q4, 2026</option><option value="Q1, 2027"${d.quarter==='Q1, 2027'?' selected':''}>Q1, 2027</option><option value="Q2, 2027"${d.quarter==='Q2, 2027'?' selected':''}>Q2, 2027</option><option value="Q3, 2027"${d.quarter==='Q3, 2027'?' selected':''}>Q3, 2027</option><option value="Q4, 2027"${d.quarter==='Q4, 2027'?' selected':''}>Q4, 2027</option></select></div></div>
-        <div class="form-group" style="margin-bottom:10px;"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2E7D32;color:#fff;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;">S</span> Specific</label><textarea id="gf-smart-s" placeholder="What exactly will be accomplished?" style="min-height:52px;">${esc(d.smartS||'')}</textarea></div>
-        <div class="form-group" style="margin-bottom:10px;"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2E7D32;color:#fff;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;">M</span> Measurable</label><textarea id="gf-smart-m" placeholder="How will you know when it's accomplished?" style="min-height:52px;">${esc(d.smartM||'')}</textarea></div>
-        <div class="form-group" style="margin-bottom:10px;"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2E7D32;color:#fff;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;">A</span> Attainable</label><textarea id="gf-smart-a" placeholder="Is it realistically achievable?" style="min-height:52px;">${esc(d.smartA||'')}</textarea></div>
-        <div class="form-group" style="margin-bottom:10px;"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2E7D32;color:#fff;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;">R</span> Relevant</label><textarea id="gf-smart-r" placeholder="Why does this matter to the team?" style="min-height:52px;">${esc(d.smartR||'')}</textarea></div>
-        <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#2E7D32;color:#fff;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;">T</span> Timely</label><textarea id="gf-smart-t" placeholder="When will it be accomplished?" style="min-height:52px;">${esc(d.smartT||'')}</textarea></div>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1968,7 +1908,7 @@ function openNewGoal() { openModal(goalForm('Add goal','saveNewGoal()',null)); s
 function saveNewGoal() {
   const title=document.getElementById('gf-title').value.trim(); if(!title) return;
   if(!state.teamGoals) state.teamGoals=[];
-  state.teamGoals.push({ id:uid(), title, description:document.getElementById('gf-desc').value.trim(), owner:document.getElementById('gf-owner').value, deadline:document.getElementById('gf-deadline').value, achieved:false, isRock:document.getElementById('gf-isrock').checked, quarter:document.getElementById('gf-quarter').value, smartS:document.getElementById('gf-smart-s').value.trim(), smartM:document.getElementById('gf-smart-m').value.trim(), smartA:document.getElementById('gf-smart-a').value.trim(), smartR:document.getElementById('gf-smart-r').value.trim(), smartT:document.getElementById('gf-smart-t').value.trim() });
+  state.teamGoals.push({ id:uid(), title, description:document.getElementById('gf-desc').value.trim(), owner:document.getElementById('gf-owner').value, deadline:document.getElementById('gf-deadline').value, achieved:false });
   closeModal(); saveState(); render();
 }
 function openEditGoal(id) {
@@ -1980,7 +1920,7 @@ function saveEditGoal(id) {
   const title=document.getElementById('gf-title').value.trim(); if(!title) return;
   const g=state.teamGoals.find(x=>x.id===id);
   if(!g) return;
-  g.title=title; g.description=document.getElementById('gf-desc').value.trim(); g.owner=document.getElementById('gf-owner').value; g.deadline=document.getElementById('gf-deadline').value; g.isRock=document.getElementById('gf-isrock').checked; g.quarter=document.getElementById('gf-quarter').value; g.smartS=document.getElementById('gf-smart-s').value.trim(); g.smartM=document.getElementById('gf-smart-m').value.trim(); g.smartA=document.getElementById('gf-smart-a').value.trim(); g.smartR=document.getElementById('gf-smart-r').value.trim(); g.smartT=document.getElementById('gf-smart-t').value.trim();
+  g.title=title; g.description=document.getElementById('gf-desc').value.trim(); g.owner=document.getElementById('gf-owner').value; g.deadline=document.getElementById('gf-deadline').value;
   closeModal(); saveState(); render();
 }
 
@@ -2342,134 +2282,6 @@ function saveEditTodo(pid,tid) {
   }
   closeModal(); saveState(); render();
 }
-
-/* ════════════════════════════════════════
-   TIME TRACKER — Google Sheets integration
-   ════════════════════════════════════════ */
-
-function rowsToTimeLog(rows) {
-  if (!rows || rows.length < 2) return [];
-  const [hdr, ...data] = rows;
-  return data.map(function(r) {
-    const o = {};
-    hdr.forEach(function(h,i){ o[h] = r[i] !== undefined ? r[i] : ''; });
-    if (!o.id) return null;
-    return { id:o.id, task:o.task||'', cat:o.cat||'other', desc:o.desc||'', rock:o.rock||'', project:o.project||'', adHocId:o.adHocId||'', adHocText:o.adHocText||'', legacyId:o.legacyId||'', legacyName:o.legacyName||'', owner:o.owner||'', duration:parseInt(o.duration)||0, startTime:o.startTime||'', endTime:o.endTime||'', checks:{ rock:o.checkRock==='true', issue:o.checkIssue==='true', project:o.checkProject==='true', task:o.checkTask==='true' } };
-  }).filter(Boolean);
-}
-
-function timeLogToRows(entries) {
-  const hdr = ['id','date','startTime','endTime','task','cat','owner','duration','rock','project','adHocId','adHocText','legacyId','legacyName','checkRock','checkIssue','checkProject','checkTask','desc'];
-  const rows = [hdr];
-  (entries||[]).forEach(function(e) {
-    const c = e.checks||{};
-    rows.push([e.id, new Date(e.startTime).toLocaleDateString(), e.startTime, e.endTime, e.task||'', e.cat||'', e.owner||'', e.duration||0, e.rock||'', e.project||'', e.adHocId||'', e.adHocText||'', e.legacyId||'', e.legacyName||'', String(!!c.rock), String(!!c.issue), String(!!c.project), String(!!c.task), e.desc||'']);
-  });
-  return rows;
-}
-
-var tt = { entries:[], timerInterval:null, startTime:null, elapsed:0, editingId:null, running:false, sessionStart:null };
-var TT_CAT_LABELS={pbi:'Power BI Front End Dev',sql:'Fabric/SQL Back End Dev',dev:'Development',docs:'Documentation',meet:'Meeting',review:'Review',admin:'Admin',lunch:'Lunch',ooo:'Out of Office',train:'Training',traina:'Training with Analyst',other:'Other'};
-var TT_CAT_TAGS={pbi:'tt-tag-pbi',sql:'tt-tag-sql',dev:'tt-tag-dev',docs:'tt-tag-docs',meet:'tt-tag-meet',review:'tt-tag-review',admin:'tt-tag-admin',lunch:'tt-tag-lunch',ooo:'tt-tag-ooo',train:'tt-tag-train',traina:'tt-tag-traina',other:'tt-tag-other'};
-var TT_CAT_OPTS=Object.entries(TT_CAT_LABELS).map(function(p){return'<option value="'+p[0]+'">'+p[1]+'</option>';}).join('');
-function ttBuildRockOpts(ownerFilter, sel) {
-  var goals = (state.teamGoals || []).filter(function(g) {
-    return g.isRock && !g.achieved && (!ownerFilter || g.owner === ownerFilter);
-  });
-  if (!goals.length) return '<option value="">— No rocks for this owner —</option>';
-  var html = '<option value="">— Rock (optional) —</option>';
-  goals.forEach(function(g) {
-    html += '<option value="' + ttEsc(g.id) + '"' + (g.id === sel ? ' selected' : '') + '>' + ttEsc(g.title) + '</option>';
-  });
-  return html;
-}
-var TT_PROJECT_GROUPS={'High Priority':['Power BI Migration: CWG Scorecard','Power BI Migration: Regional Stack Ranking','Cubes per Truck Dashboard for Aaron in Power BI','Power BI Migration: MBCI HUB Failure Report','Executive Dashboard','Power BI Migration: MBCI Scorecard'],'Medium Priority':['Take Ownership of the RLS Data Model','Review Finance Data','Operations Data Model Cleanup','Power BI Migration: Order Dwell Metrics','Add True Scan at Rec % as a Leading metric in Power BI','LMS Data'],'Low Priority':['Align on Clockify Tracking','Add Appendix to Operations Dashboard Doc','Information Overlays for Margin Analysis','Purple Scorecard','QBR Dashboard Tool','Review and Polish Dwell Dashboard'],'No Priority':["Automate QC of AWC's BI Data"]};
-var TT_PROJECT_DISPLAY={'Cubes per Truck Dashboard for Aaron in Power BI':'Cubes per Truck Dashboard for Aaron','Add True Scan at Rec % as a Leading metric in Power BI':'Add True Scan at Rec % as Leading Metric'};
-var TT_CHECKS=['rock','issue','project','task'];
-var TT_CHECK_FULL={rock:'Rock Related',issue:'Issue / Problem Solve',project:'Project',task:'Task'};
-
-function ttEsc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function ttPad(n){return String(n).padStart(2,'0');}
-function ttFmtSec(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return ttPad(h)+':'+ttPad(m)+':'+ttPad(sc);}
-function ttFmtDur(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h>0?h+'h '+m+'m':m+'m';}
-function ttFmtDurDec(s){return(s/3600).toFixed(2);}
-function ttFmtTime(iso){return new Date(iso).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:true});}
-function ttFmtTimeInput(iso){var d=new Date(iso);return ttPad(d.getHours())+':'+ttPad(d.getMinutes());}
-function ttTimeToISO(val,ref){var d=new Date(ref||Date.now()),p=val.split(':');d.setHours(parseInt(p[0]),parseInt(p[1]),0,0);return d.toISOString();}
-function ttBuildProjectOpts(sel, ownerFilter) {
-  // If Analyst selected, filter to only their projects from state
-  if (ownerFilter === 'Analyst') {
-    var analystProjects = (state.projects || []).filter(function(p) {
-      return p.owner === 'Analyst';
-    });
-    if (!analystProjects.length) return '<option value="">— No projects assigned to Analyst —</option>';
-    var html = '<option value="">— Project (optional) —</option>';
-    analystProjects.forEach(function(p) {
-      html += '<option value="' + ttEsc(p.name) + '"' + (p.name === sel ? ' selected' : '') + '>' + ttEsc(p.name) + '</option>';
-    });
-    return html;
-  }
-  // Manager or no owner: show all projects grouped by priority
-  var html = '<option value="">— Project (optional) —</option>';
-  Object.entries(TT_PROJECT_GROUPS).forEach(function(g) {
-    html += '<optgroup label="' + g[0] + '">';
-    g[1].forEach(function(p) {
-      var d = TT_PROJECT_DISPLAY[p] || p;
-      html += '<option value="' + ttEsc(p) + '"' + (p === sel ? ' selected' : '') + '>' + ttEsc(d) + '</option>';
-    });
-    html += '</optgroup>';
-  });
-  return html;
-}
-function ttRefreshDropdowns() {
-  var ownerEl = document.getElementById('tt-ownerSelect');
-  var owner = ownerEl ? ownerEl.value : '';
-  var rockEl = document.getElementById('tt-rockSelect');
-  var projEl = document.getElementById('tt-projectSelect');
-  if (rockEl) rockEl.innerHTML = ttBuildRockOpts(owner, rockEl.value);
-  if (projEl) projEl.innerHTML = ttBuildProjectOpts(projEl.value, owner);
-  var legEl = document.getElementById('tt-legacySelect');
-  if (legEl) legEl.innerHTML = ttBuildLegacyOpts(owner, legEl.value);
-}
-function ttBuildAdHocOpts(sel){var tasks=(state.adHocTasks||[]).filter(function(t){return !t.done;});if(!tasks.length)return'<option value="">— No open Ad Hoc tasks —</option>';var html='<option value="">— Ad Hoc Task (optional) —</option>';tasks.forEach(function(t){var label=t.text+(t.owner?' ['+t.owner+']':'')+(t.priority?' · '+t.priority:'');html+='<option value="'+ttEsc(t.id)+'"'+(t.id===sel?' selected':'')+'>'+ttEsc(label)+'</option>';});return html;}
-function ttBuildLegacyOpts(ownerFilter, sel) {
-  var reports = (state.excelReports || []).filter(function(r) {
-    return !ownerFilter || r.owner === ownerFilter || !r.owner;
-  });
-  if (!reports.length) return '<option value="">— No legacy reports —</option>';
-  var html = '<option value="">— Legacy Report (optional) —</option>';
-  reports.forEach(function(r) {
-    html += '<option value="' + ttEsc(r.id) + '"' + (r.id === sel ? ' selected' : '') + '>' + ttEsc(r.name) + (r.owner ? ' [' + r.owner + ']' : '') + '</option>';
-  });
-  return html;
-}
-function ttUpdateCheck(key){var cb=document.getElementById('tt-chk-'+key),lbl=document.getElementById('tt-lbl-'+key);if(!cb||!lbl)return;if(cb.checked)lbl.classList.add('tt-check-active-'+key);else lbl.classList.remove('tt-check-active-'+key);}
-function ttGetChecks(){var r={};TT_CHECKS.forEach(function(k){var el=document.getElementById('tt-chk-'+k);r[k]=el?el.checked:false;});return r;}
-function ttResetChecks(){TT_CHECKS.forEach(function(k){var el=document.getElementById('tt-chk-'+k),lbl=document.getElementById('tt-lbl-'+k);if(el)el.checked=false;if(lbl)lbl.classList.remove('tt-check-active-'+k);});}
-
-async function ttSaveToSheets(){try{await sheetsUpdate('TimeLog',timeLogToRows(tt.entries));showToast('Time log saved ✓',false);}catch(e){console.error('TimeLog save error:',e);showToast('Time log save failed',true);}}
-
-function ttStartTimer(){if(tt.running)return;tt.running=true;tt.sessionStart=new Date().toISOString();tt.startTime=Date.now()-tt.elapsed*1000;tt.timerInterval=setInterval(function(){tt.elapsed=Math.floor((Date.now()-tt.startTime)/1000);var d=document.getElementById('tt-display');if(d){d.textContent=ttFmtSec(tt.elapsed);d.classList.add('tt-running');}},500);var sb=document.getElementById('tt-startBtn'),sp=document.getElementById('tt-stopBtn');if(sb)sb.disabled=true;if(sp)sp.disabled=false;}
-
-function ttStopTimer(){if(!tt.running)return;clearInterval(tt.timerInterval);tt.timerInterval=null;tt.running=false;var taskEl=document.getElementById('tt-taskInput'),catEl=document.getElementById('tt-catSelect'),descEl=document.getElementById('tt-descInput'),rockEl=document.getElementById('tt-rockSelect'),projEl=document.getElementById('tt-projectSelect'),adHocEl=document.getElementById('tt-adHocSelect');var task=(taskEl?taskEl.value.trim():'')||'Untitled task';var cat=catEl?catEl.value:'other';var desc=descEl?descEl.value.trim():'';var rockId=rockEl?rockEl.value:'';var rockGoal=rockId?(state.teamGoals||[]).find(function(g){return g.id===rockId;}):null;var rock=rockGoal?rockGoal.title:rockId;var project=projEl?projEl.value:'';var adHocId=adHocEl?adHocEl.value:'';var adHocText='';if(adHocId){var found=(state.adHocTasks||[]).find(function(t){return t.id===adHocId;});if(found)adHocText=found.text;}var legacyEl=document.getElementById('tt-legacySelect');var legacyId=legacyEl?legacyEl.value:'';var legacyName='';if(legacyId){var fr=(state.excelReports||[]).find(function(r){return r.id===legacyId;});if(fr)legacyName=fr.name;}var checks=ttGetChecks();var owner=document.getElementById('tt-ownerSelect')?document.getElementById('tt-ownerSelect').value:'';var dur=tt.elapsed<1?1:tt.elapsed;tt.entries.unshift({id:Date.now(),task:task,cat:cat,desc:desc,rock:rock,project:project,adHocId:adHocId,adHocText:adHocText,legacyId:legacyId,legacyName:legacyName,owner:owner,checks:checks,duration:dur,startTime:tt.sessionStart,endTime:new Date().toISOString()});ttResetTimer();ttRenderLog();ttSaveToSheets();}
-
-function ttDiscardTimer(){clearInterval(tt.timerInterval);tt.timerInterval=null;tt.running=false;tt.sessionStart=null;ttResetTimer();}
-function ttResetTimer(){tt.elapsed=0;tt.startTime=null;tt.sessionStart=null;var d=document.getElementById('tt-display');if(d){d.textContent='00:00:00';d.classList.remove('tt-running');}var sb=document.getElementById('tt-startBtn'),sp=document.getElementById('tt-stopBtn');if(sb)sb.disabled=false;if(sp)sp.disabled=true;['tt-taskInput','tt-descInput'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});['tt-rockSelect','tt-projectSelect','tt-adHocSelect','tt-ownerSelect','tt-legacySelect'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});ttResetChecks();}
-function ttDeleteEntry(id){tt.entries=tt.entries.filter(function(e){return e.id!==id;});ttRenderLog();ttSaveToSheets();}
-function ttStartEdit(id){tt.editingId=id;ttRenderLog();setTimeout(function(){var el=document.getElementById('tt-edit-task-'+id);if(el)el.focus();},50);}
-function ttCancelEdit(){tt.editingId=null;ttRenderLog();}
-function ttSaveEdit(id){var tEl=document.getElementById('tt-edit-task-'+id),cEl=document.getElementById('tt-edit-cat-'+id),sEl=document.getElementById('tt-edit-start-'+id),eEl=document.getElementById('tt-edit-end-'+id),dEl=document.getElementById('tt-edit-desc-'+id),rEl=document.getElementById('tt-edit-rock-'+id),pEl=document.getElementById('tt-edit-project-'+id),aEl=document.getElementById('tt-edit-adhoc-'+id),oEl=document.getElementById('tt-edit-owner-'+id);if(!tEl)return;var entry=tt.entries.find(function(e){return e.id===id;});var ns=ttTimeToISO(sEl.value,entry.startTime),ne=ttTimeToISO(eEl.value,entry.endTime);var nd=Math.max(60,Math.floor((new Date(ne)-new Date(ns))/1000));var newChecks={};TT_CHECKS.forEach(function(k){var el=document.getElementById('tt-edit-chk-'+k+'-'+id);newChecks[k]=el?el.checked:false;});var newAdHocId=aEl?aEl.value:'';var newAdHocText='';if(newAdHocId){var f=(state.adHocTasks||[]).find(function(t){return t.id===newAdHocId;});if(f)newAdHocText=f.text;}var lEl=document.getElementById('tt-edit-legacy-'+id);var newLegacyId=lEl?lEl.value:'';var newLegacyName='';if(newLegacyId){var fr=(state.excelReports||[]).find(function(r){return r.id===newLegacyId;});if(fr)newLegacyName=fr.name;}var newOwner=oEl?oEl.value:'';tt.entries=tt.entries.map(function(e){if(e.id===id)return{id:e.id,task:tEl.value.trim()||e.task,cat:cEl.value,duration:nd,desc:dEl.value.trim(),rock:rEl.value,project:pEl.value,adHocId:newAdHocId,adHocText:newAdHocText,legacyId:newLegacyId,legacyName:newLegacyName,owner:newOwner,checks:newChecks,startTime:ns,endTime:ne};return e;});tt.editingId=null;ttRenderLog();ttSaveToSheets();}
-
-function ttShowFinish(){if(!tt.entries.length){alert('No entries to save yet.');return;}var total=tt.entries.reduce(function(s,e){return s+e.duration;},0);var fc=document.getElementById('tt-finishCount'),ft=document.getElementById('tt-finishTotal'),fd=document.getElementById('tt-finishConfirm');if(fc)fc.textContent=tt.entries.length;if(ft)ft.textContent=ttFmtDur(total);if(fd){fd.style.display='block';fd.scrollIntoView({behavior:'smooth',block:'nearest'});}}
-function ttCancelFinish(){var fd=document.getElementById('tt-finishConfirm');if(fd)fd.style.display='none';}
-function ttSaveAndFinish(){if(!tt.entries.length)return;var now=new Date(),mm=ttPad(now.getMonth()+1),dd=ttPad(now.getDate()),yyyy=now.getFullYear();var dateStr=mm+dd+yyyy;var rows=[['Date','Start','End','Task','Category','Owner','Rock','Project','Legacy Report','Ad Hoc Task','Rock Related','Issue/Problem','Project Flag','Task Flag','Duration','Hours (decimal)','Description']];for(var i=tt.entries.length-1;i>=0;i--){var e=tt.entries[i],c=e.checks||{};var q=function(v){var s=String(v||'');if(s.indexOf(',')>-1||s.indexOf('"')>-1||s.indexOf('\n')>-1)s='"'+s.replace(/"/g,'""')+'"';return s;};rows.push([q(new Date(e.startTime).toLocaleDateString()),q(ttFmtTime(e.startTime)),q(ttFmtTime(e.endTime)),q(e.task),q(TT_CAT_LABELS[e.cat]||e.cat),q(e.owner||''),q(e.rock||''),q(e.project||''),q(e.legacyName||''),q(e.adHocText||''),c.rock?'Yes':'No',c.issue?'Yes':'No',c.project?'Yes':'No',c.task?'Yes':'No',q(ttFmtDur(e.duration)),ttFmtDurDec(e.duration),q(e.desc||'')]);}var total=tt.entries.reduce(function(s,e){return s+e.duration;},0);rows.push(['','','','','','','','','','','','','','','Total',ttFmtDurDec(total),'']);var csv=rows.map(function(r){return r.join(',');}).join('\n');var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=dateStr+' DataTeamManagerTime.csv';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);ttSaveToSheets();ttCancelFinish();}
-function ttExportExcel(){if(typeof XLSX==='undefined'){alert('Excel export not available.');return;}if(!tt.entries.length){alert('No entries to export yet.');return;}var rows=[['Date','Start','End','Task','Category','Owner','Rock','Project','Legacy Report','Ad Hoc Task','Rock Related','Issue/Problem','Project Flag','Task Flag','Duration','Hours','Description']];for(var i=tt.entries.length-1;i>=0;i--){var e=tt.entries[i],c=e.checks||{};rows.push([new Date(e.startTime).toLocaleDateString(),ttFmtTime(e.startTime),ttFmtTime(e.endTime),e.task,TT_CAT_LABELS[e.cat]||e.cat,e.owner||'',e.rock||'',e.project||'',e.legacyName||'',e.adHocText||'',c.rock?'Yes':'No',c.issue?'Yes':'No',c.project?'Yes':'No',c.task?'Yes':'No',ttFmtDur(e.duration),parseFloat(ttFmtDurDec(e.duration)),e.desc||'']);}var total=tt.entries.reduce(function(s,e){return s+e.duration;},0);rows.push(['','','','','','','','','','','','','','','Total',parseFloat(ttFmtDurDec(total)),'']);var ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:11},{wch:10},{wch:10},{wch:24},{wch:22},{wch:10},{wch:28},{wch:30},{wch:28},{wch:12},{wch:13},{wch:12},{wch:10},{wch:10},{wch:8},{wch:36}];var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Time Log');var now=new Date(),mm=ttPad(now.getMonth()+1),dd=ttPad(now.getDate()),yyyy=now.getFullYear();XLSX.writeFile(wb,mm+dd+yyyy+' DataTeamManagerTime.xlsx');}
-
-function ttRenderLog(){var list=document.getElementById('tt-logList');if(!list)return;if(!tt.entries.length){list.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3);font-size:14px;">No sessions yet — start the timer to log time.</div>';ttUpdateSummary();return;}var html='';for(var i=0;i<tt.entries.length;i++){var e=tt.entries[i],c=e.checks||{};if(e.id===tt.editingId){var selOpts=TT_CAT_OPTS.replace('value="'+e.cat+'"','value="'+e.cat+'" selected');var rOpts=ttBuildRockOpts(e.owner||'', e.rock||'');var pOpts=ttBuildProjectOpts(e.project||'', e.owner||'');var aOpts=ttBuildAdHocOpts(e.adHocId||'');html+='<div style="border-bottom:1px solid var(--border);background:var(--surface2);"><div style="padding:12px 1.25rem;display:flex;flex-direction:column;gap:8px;"><div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="tt-edit-task-'+e.id+'" type="text" value="'+ttEsc(e.task)+'" style="flex:2;min-width:140px;" /><select id="tt-edit-cat-'+e.id+'" style="min-width:150px;">'+selOpts+'</select></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><select id="tt-edit-owner-'+e.id+'" style="flex:1;"><option value=\"\">\u2014 Owner \u2014</option><option value=\"Manager\"\'+(e.owner===\"Manager\"?\" selected\":\"")+\'\'>Manager</option><option value=\"Analyst\"\'+(e.owner===\"Analyst\"?\" selected\":\"")+\'\'>Analyst</option></select><select id="tt-edit-rock-'+e.id+'" style="flex:1;">'+rOpts+'</select><select id="tt-edit-project-'+e.id+'" style="flex:2;">'+pOpts+'</select></div><select id="tt-edit-adhoc-'+e.id+'" style="width:100%;">'+aOpts+'</select><select id="tt-edit-legacy-'+e.id+'" style="width:100%;margin-top:8px;">\'+ttBuildLegacyOpts(e.owner||\'\'  ,e.legacyId||\'\')+\'</select><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;"><div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:11px;color:var(--text3);">Start</label><input id="tt-edit-start-'+e.id+'" type="time" value="'+ttFmtTimeInput(e.startTime)+'" style="max-width:120px;" /></div><div style="display:flex;flex-direction:column;gap:2px;"><label style="font-size:11px;color:var(--text3);">End</label><input id="tt-edit-end-'+e.id+'" type="time" value="'+ttFmtTimeInput(e.endTime)+'" style="max-width:120px;" /></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;">';TT_CHECKS.forEach(function(k){html+='<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);"><input type="checkbox" id="tt-edit-chk-'+k+'-'+e.id+'" '+(c[k]?'checked':'')+' /> '+TT_CHECK_FULL[k]+'</label>';});html+='</div><textarea id="tt-edit-desc-'+e.id+'" style="width:100%;font-size:13px;font-family:inherit;min-height:56px;resize:vertical;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;" placeholder="Description…">'+ttEsc(e.desc||'')+'</textarea><div style="display:flex;gap:6px;"><button class="btn btn-primary btn-sm" onclick="ttSaveEdit('+e.id+')">Save</button><button class="btn btn-sm" onclick="ttCancelEdit()">Cancel</button></div></div></div>';}else{html+='<div style="border-bottom:1px solid var(--border);"><div style="display:flex;align-items:center;padding:10px 1.25rem;gap:8px;flex-wrap:wrap;"><span class="tt-tag '+TT_CAT_TAGS[e.cat]+'">'+ttEsc(TT_CAT_LABELS[e.cat]||e.cat)+'</span>';if(c.rock)html+='<span class="tt-tag tt-tag-rock">Rock</span>';if(c.issue)html+='<span class="tt-tag tt-tag-issue">Issue</span>';if(c.project)html+='<span class="tt-tag tt-tag-proj">Project</span>';if(c.task)html+='<span class="tt-tag tt-tag-task">Task</span>';html+='<span style="flex:1;font-size:14px;color:var(--text);min-width:100px;">'+ttEsc(e.task)+'</span><span style="font-size:12px;color:var(--text3);white-space:nowrap;">'+ttFmtTime(e.startTime)+' – '+ttFmtTime(e.endTime)+'</span><span style="font-weight:600;font-size:13px;min-width:52px;text-align:right;white-space:nowrap;">'+ttFmtDur(e.duration)+'</span><button class="btn btn-sm btn-edit btn-icon" onclick="ttStartEdit('+e.id+')" title="Edit">✎</button><button class="btn btn-sm btn-danger btn-icon" onclick="ttDeleteEntry('+e.id+')" title="Delete">✕</button></div>';var metaParts=[];if(e.rock)metaParts.push('Rock: '+ttEsc(e.rock));if(e.project)metaParts.push('Project: '+ttEsc(TT_PROJECT_DISPLAY[e.project]||e.project));if(e.owner)metaParts.push('Owner: '+ttEsc(e.owner));if(e.legacyName)metaParts.push('Legacy: '+ttEsc(e.legacyName));if(e.adHocText)metaParts.push('Ad Hoc: '+ttEsc(e.adHocText));if(metaParts.length)html+='<div style="padding:0 1.25rem 6px;font-size:12px;color:var(--text3);">'+metaParts.join(' &nbsp;·&nbsp; ')+'</div>';if(e.desc)html+='<div style="padding:0 1.25rem 10px;font-size:13px;color:var(--text2);line-height:1.5;">'+ttEsc(e.desc)+'</div>';html+='</div>';}}list.innerHTML=html;ttUpdateSummary();}
-
-function ttUpdateSummary(){var total=0,rockTotal=0;for(var i=0;i<tt.entries.length;i++){total+=tt.entries[i].duration;if(tt.entries[i].checks&&tt.entries[i].checks.rock)rockTotal+=tt.entries[i].duration;}var h=Math.floor(total/3600),m=Math.floor((total%3600)/60);var el=document.getElementById('tt-totalToday');if(el)el.textContent=h+'h '+m+'m';var sc=document.getElementById('tt-sessionCount');if(sc)sc.textContent=tt.entries.length;var rh=Math.floor(rockTotal/3600),rm=Math.floor((rockTotal%3600)/60);var rt=document.getElementById('tt-rockTime');if(rt)rt.textContent=rh+'h '+rm+'m';var cats={},top=null,topVal=0;for(var i=0;i<tt.entries.length;i++)cats[tt.entries[i].cat]=(cats[tt.entries[i].cat]||0)+tt.entries[i].duration;for(var k in cats){if(cats[k]>topVal){topVal=cats[k];top=k;}}var tc=document.getElementById('tt-topCat');if(tc)tc.textContent=top?TT_CAT_LABELS[top]:'—';}
-
-function renderTimeTracker(){var dateStr=new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});var openAdHocCount=(state.adHocTasks||[]).filter(function(t){return !t.done;}).length;return`<style>.tt-timer{font-size:48px;font-weight:500;letter-spacing:3px;color:var(--text);margin-bottom:1rem;font-variant-numeric:tabular-nums;}.tt-timer.tt-running{color:#0F6E56;}.tt-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px;}.tt-check-lbl{display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text);transition:background 0.1s,border-color 0.1s;}.tt-check-lbl input{cursor:pointer;}.tt-check-active-rock{border-color:#EF9F27!important;background:#FAEEDA!important;}.tt-check-active-issue{border-color:#E24B4A!important;background:#FCEBEB!important;}.tt-check-active-project{border-color:#7F77DD!important;background:#EEEDFE!important;}.tt-check-active-task{border-color:#1D9E75!important;background:#E1F5EE!important;}.tt-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap;}.tt-tag-pbi{background:#B5D4F4;color:#042C53;}.tt-tag-sql{background:#85B7EB;color:#042C53;}.tt-tag-dev{background:#E6F1FB;color:#0C447C;}.tt-tag-docs{background:#E1F5EE;color:#085041;}.tt-tag-meet{background:#EEEDFE;color:#3C3489;}.tt-tag-review{background:#EAF3DE;color:#27500A;}.tt-tag-admin{background:#FAEEDA;color:#633806;}.tt-tag-lunch{background:#C0DD97;color:#173404;}.tt-tag-ooo{background:#F5C4B3;color:#4A1B0C;}.tt-tag-train{background:#CECBF6;color:#26215C;}.tt-tag-traina{background:#AFA9EC;color:#26215C;}.tt-tag-other{background:#f0ede8;color:#555;}.tt-tag-rock{background:#EF9F27;color:#412402;}.tt-tag-issue{background:#F09595;color:#501313;}.tt-tag-proj{background:#AFA9EC;color:#26215C;}.tt-tag-task{background:#5DCAA5;color:#04342C;}.tt-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:1.25rem;}.tt-metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center;box-shadow:var(--shadow);}.tt-metric-val{font-size:20px;font-weight:600;color:var(--text);}.tt-metric-lbl{font-size:11px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:0.04em;}.btn-finish{background:#0F6E56;border-color:#0F6E56;color:#fff;}.btn-finish:hover{background:#085041;border-color:#085041;}</style><div class="topbar"><div class="topbar-left"><div class="breadcrumb">Data Team</div><h1>Time Tracker</h1><div class="subtitle">${dateStr}</div></div></div><div class="main-nav"><div class="main-nav-tab" onclick="goMaster()">Projects</div><div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div><div class="main-nav-tab" onclick="goGoals()">Goals</div><div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div><div class="main-nav-tab" onclick="goTraining()">Training</div><div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div><div class="main-nav-tab active" onclick="goTimeTracker()">Time Tracker</div></div><div class="card"><div class="tt-timer" id="tt-display">${ttFmtSec(tt.elapsed)}</div><div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><input type="text" id="tt-taskInput" placeholder="What are you working on?" style="flex:1;min-width:120px;" /><select id="tt-catSelect" style="flex:1;min-width:120px;">${TT_CAT_OPTS}</select></div><div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><select id="tt-ownerSelect" style="flex:1;min-width:120px;" onchange="ttRefreshDropdowns()"><option value="">— Owner —</option><option value="Manager">Manager</option><option value="Analyst">Analyst</option></select><select id="tt-rockSelect" style="flex:1;">${ttBuildRockOpts("", "")}</select><select id="tt-projectSelect" style="flex:2;">${ttBuildProjectOpts('', '')}</select></div><div style="margin-bottom:8px;"><select id="tt-adHocSelect" style="width:100%;">${ttBuildAdHocOpts('')}</select>${openAdHocCount>0?'<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+openAdHocCount+' open Ad Hoc task'+(openAdHocCount!==1?'s':'')+'</div>':''}</div><div style="margin-bottom:8px;"><select id="tt-legacySelect" style="width:100%;">${ttBuildLegacyOpts('', '')}</select></div><div class="tt-checks"><label class="tt-check-lbl" id="tt-lbl-rock"><input type="checkbox" id="tt-chk-rock" onchange="ttUpdateCheck(\'rock\')" /> Rock Related</label><label class="tt-check-lbl" id="tt-lbl-issue"><input type="checkbox" id="tt-chk-issue" onchange="ttUpdateCheck(\'issue\')" /> Issue / Problem Solve</label><label class="tt-check-lbl" id="tt-lbl-project"><input type="checkbox" id="tt-chk-project" onchange="ttUpdateCheck(\'project\')" /> Project</label><label class="tt-check-lbl" id="tt-lbl-task"><input type="checkbox" id="tt-chk-task" onchange="ttUpdateCheck(\'task\')" /> Task</label></div><textarea id="tt-descInput" placeholder="Description (optional)…" style="width:100%;font-size:13px;font-family:inherit;min-height:60px;resize:vertical;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" id="tt-startBtn" onclick="ttStartTimer()" ${tt.running?'disabled':''}>Start</button><button class="btn" id="tt-stopBtn" onclick="ttStopTimer()" ${!tt.running?'disabled':''}>Stop &amp; log</button><button class="btn" onclick="ttDiscardTimer()">Discard</button></div></div><div class="tt-metrics"><div class="tt-metric"><div class="tt-metric-val" id="tt-totalToday">0h 0m</div><div class="tt-metric-lbl">Today</div></div><div class="tt-metric"><div class="tt-metric-val" id="tt-sessionCount">0</div><div class="tt-metric-lbl">Sessions</div></div><div class="tt-metric"><div class="tt-metric-val" id="tt-rockTime">0h 0m</div><div class="tt-metric-lbl">Rock time</div></div><div class="tt-metric"><div class="tt-metric-val" id="tt-topCat">—</div><div class="tt-metric-lbl">Top category</div></div></div><div class="card" style="padding:0;overflow:hidden;"><div style="padding:12px 1.25rem;font-size:13px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><span>Today\'s log</span><button class="btn btn-sm" onclick="ttExportExcel()">Download Excel</button></div><div id="tt-logList"><div style="padding:2rem;text-align:center;color:var(--text3);font-size:14px;">No sessions yet — start the timer to log time.</div></div></div><div id="tt-finishConfirm" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow);"><p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">You have <strong id="tt-finishCount">0</strong> entries totalling <strong id="tt-finishTotal">0h 0m</strong>. Clicking <strong>Save &amp; Finish</strong> will download a CSV and sync to Google Sheets.</p><div style="display:flex;gap:8px;"><button class="btn btn-finish" onclick="ttSaveAndFinish()">Save &amp; Finish</button><button class="btn" onclick="ttCancelFinish()">Cancel</button></div></div><div style="display:flex;justify-content:flex-end;padding:1rem 0 0;"><button class="btn btn-finish" onclick="ttShowFinish()">Finish Day</button></div>`;}
 
 loadState().then(() => render()).catch(() => render());
 </script>
