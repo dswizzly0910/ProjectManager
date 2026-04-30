@@ -552,6 +552,14 @@ async function loadState() {
     allTrainings.forEach(t => { t.todos = allTrainTodos.filter(td => td.trainingId === t.id); });
     state.trainings = allTrainings;
 
+    // Load project groups (stored as single-column values)
+    try {
+      const pgRows = await sheetsGet('ProjectGroups');
+      if (pgRows && pgRows.length > 1) {
+        state.projectGroups = pgRows.slice(1).map(r => r[0]).filter(Boolean);
+      }
+    } catch(e) { /* sheet may not exist yet, use defaults */ }
+
     showToast('Data loaded', false);
   } catch(e) {
     console.error('Load error:', e);
@@ -584,6 +592,7 @@ async function saveState() {
       sheetsUpdate('ExcelReports', excelReportsToRows(state.excelReports||[])),
       sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])),
       sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]),
+      sheetsUpdate('ProjectGroups', [['name'], ...(state.projectGroups||[]).map(g=>[g])]),
     ]);
     state._pendingNotify = [];
     state._pendingAdHocNotify = [];
@@ -602,9 +611,9 @@ const OWNER_OPTIONS = ['Manager', 'Analyst'];
 const STAKEHOLDER_OPTIONS = ['Matt Rayburn','Steve Burgess','Alfie S.','Alyssa Popa','Aaron O.','Holland B.'];
 const PROJECT_PRIORITY_OPTIONS = ['Very Low','Low','Important','Very Important','Urgent'];
 const TASK_PRIORITY_OPTIONS = ['Urgent','Very Important','Important','Low','Very Low'];
-const PROJECT_GROUP_OPTIONS = ['Excel to Power BI Migrations', 'AI Projects'];
+// PROJECT_GROUP_OPTIONS is now dynamic — use state.projectGroups instead
 
-let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:false, projects:[], adHocTasks:[], adHocGroup:'none', teamGoals:[], excelReports:[], trainings:[], expandedTraining:null };
+let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:false, filterOwner:'', projects:[], adHocTasks:[], adHocGroup:'none', hideCompleteAdHoc:false, teamGoals:[], excelReports:[], trainings:[], expandedTraining:null, hideCompleteMasterTodos:false, projectGroups:['Excel to Power BI Migrations','AI Projects'] };
 
 const DEFAULT_PROJECTS = [
   { id:'p1', name:'Website Redesign', status:'active', owner:'Manager',
@@ -714,7 +723,9 @@ function renderMaster() {
   const complete=state.projects.filter(p=>p.status==='complete').length;
   const avg=total?Math.round(state.projects.reduce((a,p)=>a+p.progress,0)/total):0;
   const sb=state.sortBy||'none';
-  const ps=state.hideComplete ? state.projects.filter(p=>p.status!=='complete') : state.projects;
+  const fo=state.filterOwner||'';
+  let ps = state.hideComplete ? state.projects.filter(p=>p.status!=='complete') : state.projects;
+  if (fo) ps = ps.filter(p => p.owner === fo);
 
   let html=`
   <div class="topbar">
@@ -723,7 +734,7 @@ function renderMaster() {
       <div class="subtitle">${total} project${total!==1?'s':''} total</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      
+      <button class="btn" onclick="openManageGroups()">⚙ Manage Groups</button>
       <button class="btn btn-primary" onclick="openNewProject()">+ New project</button>
     </div>
   </div>
@@ -742,7 +753,17 @@ function renderMaster() {
     <div class="metric"><div class="metric-label">Completed</div><div class="metric-value">${complete}</div></div>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-    <div class="section-title" style="font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;">All projects</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div class="section-title" style="font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;">All projects</div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="font-size:12px;color:var(--text3);font-weight:500;">Filter by owner:</span>
+        <select style="font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:4px 26px 4px 8px;cursor:pointer;outline:none;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%277%27 viewBox=%270 0 10 7%27%3E%3Cpath d=%27M1 1l4 4 4-4%27 stroke=%27%239b9890%27 stroke-width=%271.3%27 fill=%27none%27 stroke-linecap=%27round%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 8px center;" onchange="setFilterOwner(this.value)">
+          <option value="" ${fo===''?'selected':''}>All owners</option>
+          ${OWNER_OPTIONS.map(o=>`<option value="${esc(o)}" ${fo===o?'selected':''}>${esc(o)}</option>`).join('')}
+        </select>
+        ${fo?`<button class="btn btn-sm" onclick="setFilterOwner('')" style="padding:3px 8px;font-size:11px;">✕ Clear</button>`:''}
+      </div>
+    </div>
     <div class="board-controls">
       <span class="board-controls-label">Sort by:</span>
       <button class="sort-btn ${sb==='none'?'active':''}" onclick="setSortBy('none')">Default</button>
@@ -1116,9 +1137,11 @@ function todoItemHtml(t, pid) {
 
 /* ── Ad Hoc Tasks view ── */
 function renderAdHoc() {
-  const tasks = state.adHocTasks || [];
+  const allTasks = state.adHocTasks || [];
+  const hideComp = !!state.hideCompleteAdHoc;
+  const tasks = hideComp ? allTasks.filter(t=>!t.done) : allTasks;
   const grp = state.adHocGroup || 'none';
-  const done = tasks.filter(t=>t.done).length;
+  const done = allTasks.filter(t=>t.done).length;
 
   let html = `
   <div class="topbar">
@@ -1139,9 +1162,14 @@ function renderAdHoc() {
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
     <div>
       <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Ad Hoc Tasks</div>
-      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${done} of ${tasks.length} complete</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:2px;">${done} of ${allTasks.length} complete</div>
     </div>
     <div class="board-controls">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);user-select:none;">
+        <input type="checkbox" ${hideComp?'checked':''} onchange="toggleHideCompleteAdHoc()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+        Hide completed
+      </label>
+      <span style="width:1px;height:18px;background:var(--border2);display:inline-block;margin:0 2px;"></span>
       <span class="board-controls-label">Group by:</span>
       <button class="sort-btn ${grp==='none'?'active':''}" onclick="setAdHocGroup('none')">None</button>
       <button class="sort-btn ${grp==='owner'?'active':''}" onclick="setAdHocGroup('owner')">Owner</button>
@@ -1150,8 +1178,12 @@ function renderAdHoc() {
     </div>
   </div>`;
 
-  if (!tasks.length) {
+  if (!allTasks.length) {
     html += `<div class="todo-list"><div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No ad hoc tasks yet. Add one above.</div></div></div>`;
+    return html;
+  }
+  if (!tasks.length) {
+    html += `<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">All tasks are complete! Uncheck "Hide completed" to see them.</div></div></div>`;
     return html;
   }
 
@@ -1602,6 +1634,7 @@ function renderTraining() {
 
 /* ── Master To Dos view ── */
 function renderMasterTodos() {
+  const hideComp = !!state.hideCompleteMasterTodos;
   // Collect all project todos
   const projectTodos = state.projects.flatMap(p =>
     (p.todos||[]).map(t => ({
@@ -1663,6 +1696,12 @@ function renderMasterTodos() {
       <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">Master To Dos</div>
       <div style="font-size:13px;color:var(--text3);margin-top:2px;">${totalOpen} open · ${totalDone} complete · ${allTasks.length} total across all projects &amp; ad hoc tasks</div>
     </div>
+    <div class="board-controls">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);user-select:none;">
+        <input type="checkbox" ${hideComp?'checked':''} onchange="toggleHideCompleteMasterTodos()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+        Hide completed
+      </label>
+    </div>
   </div>`;
 
   if (!allTasks.length) {
@@ -1672,8 +1711,10 @@ function renderMasterTodos() {
 
   sortedOwners.forEach(owner => {
     const tasks = byOwner[owner];
+    const visibleTasks = hideComp ? tasks.filter(t=>!t.done) : tasks;
+    if (!visibleTasks.length) return;
     const openCount = tasks.filter(t=>!t.done).length;
-    const sorted = [...tasks].sort((a,b) => {
+    const sorted = [...visibleTasks].sort((a,b) => {
       // Sort: open before done, then by priority, then by due date
       if (a.done !== b.done) return a.done ? 1 : -1;
       const pr = priorityRank(a.priority) - priorityRank(b.priority);
@@ -1744,6 +1785,72 @@ function toggleExcelCol(col) { if(!state.excelHiddenCols) state.excelHiddenCols=
 function goTraining() { state.view='training'; render(); }
 function goMasterTodos() { state.view='mastertodos'; render(); }
 function toggleTrainingExpand(id) { state.expandedTraining = state.expandedTraining===id?null:id; render(); }
+function setFilterOwner(v) { state.filterOwner=v; render(); }
+function toggleHideCompleteAdHoc() { state.hideCompleteAdHoc=!state.hideCompleteAdHoc; render(); }
+function toggleHideCompleteMasterTodos() { state.hideCompleteMasterTodos=!state.hideCompleteMasterTodos; render(); }
+
+/* ── Manage Project Groups ── */
+function openManageGroups() {
+  function groupsModalHtml() {
+    const groups = state.projectGroups || [];
+    const rows = groups.map((g,i) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <input type="text" value="${esc(g)}" id="pg-input-${i}" style="flex:1;" placeholder="Group name">
+        <button class="btn btn-sm btn-danger btn-icon" onclick="removeProjectGroup(${i})" title="Delete group">×</button>
+      </div>`).join('');
+    return `
+      <div class="modal-title">Manage Project Groups</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Add, rename, or remove groups. Changes apply when you click Save.</div>
+      <div id="pg-rows">${rows}</div>
+      <button class="btn btn-sm" style="margin-top:4px;" onclick="addProjectGroupRow()">+ Add group</button>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveProjectGroups()">Save changes</button>
+      </div>`;
+  }
+  openModal(groupsModalHtml());
+}
+
+function addProjectGroupRow() {
+  // Read existing values from inputs first, then add a new blank row
+  const rows = document.getElementById('pg-rows');
+  const inputs = rows.querySelectorAll('input[type=text]');
+  const existing = Array.from(inputs).map(el => el.value.trim()).filter(Boolean);
+  const newIndex = existing.length;
+  // Re-render rows with existing values + blank
+  const all = [...existing, ''];
+  rows.innerHTML = all.map((g,i) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <input type="text" value="${esc(g)}" id="pg-input-${i}" style="flex:1;" placeholder="Group name">
+      <button class="btn btn-sm btn-danger btn-icon" onclick="removeProjectGroupRow(${i})" title="Delete group">×</button>
+    </div>`).join('');
+  document.getElementById(`pg-input-${newIndex}`)?.focus();
+}
+
+function removeProjectGroupRow(i) {
+  const rows = document.getElementById('pg-rows');
+  const inputs = rows.querySelectorAll('input[type=text]');
+  const existing = Array.from(inputs).map(el => el.value.trim());
+  existing.splice(i, 1);
+  rows.innerHTML = existing.map((g,j) => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <input type="text" value="${esc(g)}" id="pg-input-${j}" style="flex:1;" placeholder="Group name">
+      <button class="btn btn-sm btn-danger btn-icon" onclick="removeProjectGroupRow(${j})" title="Delete group">×</button>
+    </div>`).join('');
+}
+
+function removeProjectGroup(i) { removeProjectGroupRow(i); }
+
+function saveProjectGroups() {
+  const inputs = document.querySelectorAll('#pg-rows input[type=text]');
+  const groups = Array.from(inputs).map(el => el.value.trim()).filter(Boolean);
+  // Deduplicate
+  state.projectGroups = [...new Set(groups)];
+  closeModal();
+  saveState();
+  render();
+}
+
 function setAdHocGroup(v) { state.adHocGroup=v; render(); }
 function toggleAdHoc(tid) {
   const t=state.adHocTasks.find(x=>x.id===tid);
@@ -2043,7 +2150,7 @@ function projectFormHtml(title, saveCall, p) {
       <div class="form-group"><label class="form-label">Status</label><select id="pf-status">${['planning','active','paused','blocked','complete'].map(s=>`<option value="${s}" ${(d.status||'planning')===s?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Owner</label><select id="pf-owner">${ownerOpts(d.owner||'')}</select></div>
       <div class="form-group"><label class="form-label">Priority</label><select id="pf-priority">${projPriorityOpts(d.priority||'')}</select></div>
-      <div class="form-group"><label class="form-label">Project Group</label><select id="pf-group"><option value="">— No group —</option>${PROJECT_GROUP_OPTIONS.map(g=>`<option value="${esc(g)}" ${(d.projectGroup||'')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Project Group</label><select id="pf-group"><option value="">— No group —</option>${(state.projectGroups||[]).map(g=>`<option value="${esc(g)}" ${(d.projectGroup||'')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">% Complete</label><input type="number" id="pf-pct" min="0" max="100" value="${d.progress??0}"></div>
       <div class="form-group"><label class="form-label">Start date</label><input type="date" id="pf-start" value="${d.startDate||''}"></div>
       <div class="form-group"><label class="form-label">Est. completion date</label><input type="date" id="pf-est" value="${d.estCompletionDate||''}"></div>
