@@ -549,9 +549,10 @@ async function loadState() {
     state.teamGoals  = rowsToGoals(goalRows);
     state.excelReports = rowsToExcelReports(excelRows);
 
-    // Load today's time log entries
+    // Load time log — keep ALL historical entries, show only today in the UI
     const todayStr = new Date().toLocaleDateString();
     const allTimeLog = rowsToTimeLog(timeLogRows);
+    tt.allEntries = allTimeLog; // full history preserved for saving back
     tt.entries = allTimeLog.filter(function(e){ return new Date(e.startTime).toLocaleDateString() === todayStr; });
 
     const allTrainings = rowsToTrainings(trainRows);
@@ -600,7 +601,14 @@ async function saveState() {
       sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])),
       sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]),
       sheetsUpdate('ProjectGroups', [['name'], ...(state.projectGroups||[]).map(g=>[g])]),
-      sheetsUpdate('TimeLog', timeLogToRows(tt.entries)),
+      (function(){
+        // Save full time log history (not just today)
+        var todayStr = new Date().toLocaleDateString();
+        var historical = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== todayStr; });
+        var fullLog = historical.concat(tt.entries);
+        tt.allEntries = fullLog;
+        return sheetsUpdate('TimeLog', timeLogToRows(fullLog));
+      })()
     ]);
     state._pendingNotify = [];
     state._pendingAdHocNotify = [];
@@ -2367,7 +2375,7 @@ function timeLogToRows(entries) {
   return rows;
 }
 
-var tt = { entries:[], timerInterval:null, startTime:null, elapsed:0, editingId:null, running:false, sessionStart:null };
+var tt = { entries:[], allEntries:[], timerInterval:null, startTime:null, elapsed:0, editingId:null, running:false, sessionStart:null };
 var TT_CAT_LABELS={pbi:'Power BI Front End Dev',sql:'Fabric/SQL Back End Dev',dev:'Development',docs:'Documentation',meet:'Meeting',review:'Review',admin:'Admin',lunch:'Lunch',ooo:'Out of Office',train:'Training',traina:'Training with Analyst',other:'Other'};
 var TT_CAT_TAGS={pbi:'tt-tag-pbi',sql:'tt-tag-sql',dev:'tt-tag-dev',docs:'tt-tag-docs',meet:'tt-tag-meet',review:'tt-tag-review',admin:'tt-tag-admin',lunch:'tt-tag-lunch',ooo:'tt-tag-ooo',train:'tt-tag-train',traina:'tt-tag-traina',other:'tt-tag-other'};
 var TT_CAT_OPTS=Object.entries(TT_CAT_LABELS).map(function(p){return'<option value="'+p[0]+'">'+p[1]+'</option>';}).join('');
@@ -2478,7 +2486,21 @@ function ttUpdateCheck(key){var cb=document.getElementById('tt-chk-'+key),lbl=do
 function ttGetChecks(){var r={};TT_CHECKS.forEach(function(k){var el=document.getElementById('tt-chk-'+k);r[k]=el?el.checked:false;});return r;}
 function ttResetChecks(){TT_CHECKS.forEach(function(k){var el=document.getElementById('tt-chk-'+k),lbl=document.getElementById('tt-lbl-'+k);if(el)el.checked=false;if(lbl)lbl.classList.remove('tt-check-active-'+k);});}
 
-async function ttSaveToSheets(){try{await sheetsUpdate('TimeLog',timeLogToRows(tt.entries));showToast('Time log saved ✓',false);}catch(e){console.error('TimeLog save error:',e);showToast('Time log save failed',true);}}
+async function ttSaveToSheets(){
+  try {
+    // Merge: take all non-today entries from allEntries, then add today's current entries
+    var todayStr = new Date().toLocaleDateString();
+    var historical = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== todayStr; });
+    var fullLog = historical.concat(tt.entries);
+    // Update allEntries so subsequent saves stay consistent
+    tt.allEntries = fullLog;
+    await sheetsUpdate('TimeLog', timeLogToRows(fullLog));
+    showToast('Time log saved ✓', false);
+  } catch(e) {
+    console.error('TimeLog save error:', e);
+    showToast('Time log save failed', true);
+  }
+}
 
 function ttStartTimer(){if(tt.running)return;tt.running=true;tt.sessionStart=new Date().toISOString();tt.startTime=Date.now()-tt.elapsed*1000;tt.timerInterval=setInterval(function(){tt.elapsed=Math.floor((Date.now()-tt.startTime)/1000);var d=document.getElementById('tt-display');if(d){d.textContent=ttFmtSec(tt.elapsed);d.classList.add('tt-running');}},500);var sb=document.getElementById('tt-startBtn'),sp=document.getElementById('tt-stopBtn');if(sb)sb.disabled=true;if(sp)sp.disabled=false;}
 
