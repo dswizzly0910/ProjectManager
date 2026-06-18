@@ -572,10 +572,14 @@ async function loadState() {
     state.excelReports = rowsToExcelReports(excelRows);
 
     // Load time log — keep ALL historical entries, show only today in the UI
-    const todayStr = new Date().toLocaleDateString();
     const allTimeLog = rowsToTimeLog(timeLogRows);
-    tt.allEntries = allTimeLog; // full history preserved for saving back
-    tt.entries = allTimeLog.filter(function(e){ return new Date(e.startTime).toLocaleDateString() === todayStr; });
+    tt.allEntries = allTimeLog;
+    const todayISO = (function(){ var n=new Date(); return n.getFullYear()+'-'+(n.getMonth()+1<10?'0':'')+(n.getMonth()+1)+'-'+(n.getDate()<10?'0':'')+n.getDate(); })();
+    tt.entries = allTimeLog.filter(function(e){
+      var d = new Date(e.startTime);
+      var ds = d.getFullYear()+'-'+(d.getMonth()+1<10?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate();
+      return ds === todayISO;
+    });
 
     const allTrainings = rowsToTrainings(trainRows);
     const allTrainTodos = rowsToTrainingTodos(trainTodoRows);
@@ -624,9 +628,9 @@ async function saveState() {
       sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]),
       sheetsUpdate('ProjectGroups', [['name'], ...(state.projectGroups||[]).map(g=>[g])]),
       (function(){
-        // Save full time log history (not just today)
-        var todayStr = new Date().toLocaleDateString();
-        var historical = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== todayStr; });
+        // Save full time log history (not just today) — use active date, not hardcoded today
+        var activeDateStr = ttActiveDateLocalStr();
+        var historical = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== activeDateStr; });
         var fullLog = historical.concat(tt.entries);
         tt.allEntries = fullLog;
         return sheetsUpdate('TimeLog', timeLogToRows(fullLog));
@@ -2749,10 +2753,13 @@ function ttResetChecks(){TT_CHECKS.forEach(function(k){var el=document.getElemen
 async function ttSaveToSheets(){
   try {
     // Merge: take all entries NOT from the active date, then add the active date's current entries
-    var activeDateStr = ttActiveDateLocalStr();
-    var historical = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== activeDateStr; });
+    var activeDateStr = ttGetActiveDateStr(); // YYYY-MM-DD — unambiguous
+    var historical = (tt.allEntries||[]).filter(function(e){
+      var d = new Date(e.startTime);
+      var ds = d.getFullYear()+'-'+ttPad(d.getMonth()+1)+'-'+ttPad(d.getDate());
+      return ds !== activeDateStr;
+    });
     var fullLog = historical.concat(tt.entries);
-    // Update allEntries so subsequent saves stay consistent
     tt.allEntries = fullLog;
     await sheetsUpdate('TimeLog', timeLogToRows(fullLog));
     showToast('Time log saved ✓', false);
@@ -2764,14 +2771,22 @@ async function ttSaveToSheets(){
 
 function ttSwitchDate(val){
   // Save current entries back into allEntries before switching
-  var activeDateStr = ttActiveDateLocalStr();
-  var others = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== activeDateStr; });
+  var activeDateStr = ttGetActiveDateStr(); // YYYY-MM-DD format — unambiguous
+  var others = (tt.allEntries||[]).filter(function(e){
+    var d = new Date(e.startTime);
+    var ds = d.getFullYear()+'-'+ttPad(d.getMonth()+1)+'-'+ttPad(d.getDate());
+    return ds !== activeDateStr;
+  });
   tt.allEntries = others.concat(tt.entries);
   // Set new active date
   if(!val){tt.activeDate=null;}else{var d=new Date(val+'T00:00:00');tt.activeDate=isNaN(d)?null:d;}
   // Load entries for new date
-  var newDateStr = ttActiveDateLocalStr();
-  tt.entries = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() === newDateStr; });
+  var newDateStr = ttGetActiveDateStr(); // YYYY-MM-DD
+  tt.entries = (tt.allEntries||[]).filter(function(e){
+    var d = new Date(e.startTime);
+    var ds = d.getFullYear()+'-'+ttPad(d.getMonth()+1)+'-'+ttPad(d.getDate());
+    return ds === newDateStr;
+  });
   // Re-render the whole time tracker view, then populate the log
   render();
   setTimeout(function(){ ttRenderLog(); }, 50);
