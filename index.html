@@ -2772,8 +2772,9 @@ function ttSwitchDate(val){
   // Load entries for new date
   var newDateStr = ttActiveDateLocalStr();
   tt.entries = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() === newDateStr; });
-  // Re-render the whole time tracker view
+  // Re-render the whole time tracker view, then populate the log
   render();
+  setTimeout(function(){ ttRenderLog(); }, 50);
 }
 
 function ttLogManualEntry(){
