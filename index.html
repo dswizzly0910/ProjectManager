@@ -444,14 +444,15 @@ function rowsToTodos(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:parseBool(o.done) };
+    const orderVal = o.order !== '' && o.order !== undefined ? parseInt(o.order) : null;
+    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:parseBool(o.done), order:isNaN(orderVal)?null:orderVal };
   }).filter(t => t.id);
 }
 
 function todosToRows(todos) {
-  const hdr = ['id','projectId','text','owner','priority','dueDate','done'];
+  const hdr = ['id','projectId','text','owner','priority','dueDate','done','order'];
   const rows = [hdr];
-  todos.forEach(t => rows.push([t.id, t.projectId||'', t.text||'', t.owner||'', t.priority||'', t.dueDate||'', String(!!t.done)]));
+  todos.forEach(t => rows.push([t.id, t.projectId||'', t.text||'', t.owner||'', t.priority||'', t.dueDate||'', String(!!t.done), t.order!=null?t.order:'']));
   return rows;
 }
 
