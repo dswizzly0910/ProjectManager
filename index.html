@@ -417,8 +417,8 @@ function rowsToProjects(rows) {
       priority: o.priority, projectGroup: o.projectGroup,
       rockRelated: parseBool(o.rockRelated),
       progress: parseInt(o.progress)||0,
-      startDate: o.startDate, estCompletionDate: o.estCompletionDate,
-      completionDate: o.completionDate,
+      startDate: toPlainDateStr(o.startDate), estCompletionDate: toPlainDateStr(o.estCompletionDate),
+      completionDate: toPlainDateStr(o.completionDate),
       stakeholders: o.stakeholders ? o.stakeholders.split('|') : [],
       blockers: o.blockers, notes: o.notes, goals: o.goals, sfCase: o.sfCase,
       todos: []
@@ -445,7 +445,7 @@ function rowsToTodos(rows) {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
     const orderVal = o.order !== '' && o.order !== undefined ? parseInt(o.order) : null;
-    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:parseBool(o.done), order:isNaN(orderVal)?null:orderVal };
+    return { id:o.id, projectId:o.projectId, text:o.text, owner:o.owner, priority:o.priority, dueDate:toPlainDateStr(o.dueDate), done:parseBool(o.done), order:isNaN(orderVal)?null:orderVal };
   }).filter(t => t.id);
 }
 
@@ -458,13 +458,26 @@ function todosToRows(todos) {
 
 function parseBool(v) { return v === true || v === 'true' || v === 'TRUE'; }
 
+function toPlainDateStr(v) {
+  // Google Sheets sometimes auto-converts a plain "yyyy-MM-dd" string into
+  // a real Date-typed cell. Apps Script then returns that back as a full
+  // ISO datetime (e.g. "2026-09-30T04:00:00.000Z"), which breaks
+  // <input type="date"> (browsers silently reject anything but yyyy-MM-dd)
+  // and clears the field. Strip everything from "T" onward so we always
+  // work with a clean date string no matter how Sheets stored it.
+  if (!v) return '';
+  var s = String(v);
+  var t = s.indexOf('T');
+  return t === -1 ? s : s.slice(0, t);
+}
+
 function rowsToAdHoc(rows) {
   if (!rows.length) return [];
   const [hdr, ...data] = rows;
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i] !== undefined ? r[i] : '');
-    return { id:o.id, text:o.text, notes:o.notes, owner:o.owner, priority:o.priority, dueDate:o.dueDate, done:parseBool(o.done) };
+    return { id:o.id, text:o.text, notes:o.notes, owner:o.owner, priority:o.priority, dueDate:toPlainDateStr(o.dueDate), done:parseBool(o.done) };
   }).filter(t => t.id);
 }
 
@@ -481,7 +494,7 @@ function rowsToGoals(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:o.deadline, achieved:parseBool(o.achieved), isRock:parseBool(o.isRock), quarter:o.quarter||'', smartS:o.smartS||'', smartM:o.smartM||'', smartA:o.smartA||'', smartR:o.smartR||'', smartT:o.smartT||'' };
+    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:toPlainDateStr(o.deadline), achieved:parseBool(o.achieved), isRock:parseBool(o.isRock), quarter:o.quarter||'', smartS:o.smartS||'', smartM:o.smartM||'', smartA:o.smartA||'', smartR:o.smartR||'', smartT:o.smartT||'' };
   }).filter(g => g.id);
 }
 
@@ -517,7 +530,7 @@ function rowsToTrainings(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, name:o.name, status:o.status, dueDate:o.dueDate, todos:[] };
+    return { id:o.id, name:o.name, status:o.status, dueDate:toPlainDateStr(o.dueDate), todos:[] };
   }).filter(t => t.id);
 }
 
@@ -534,7 +547,7 @@ function rowsToTrainingTodos(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, trainingId:o.trainingId, text:o.text, owner:o.owner, dueDate:o.dueDate, done:parseBool(o.done) };
+    return { id:o.id, trainingId:o.trainingId, text:o.text, owner:o.owner, dueDate:toPlainDateStr(o.dueDate), done:parseBool(o.done) };
   }).filter(t => t.id);
 }
 
