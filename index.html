@@ -609,43 +609,56 @@ async function saveState() {
   syncing = true;
   pendingSave = false;
   showSyncBar();
-  try {
-    // Flatten todos with projectId
-    const allTodos = state.projects.flatMap(p =>
-      (p.todos||[]).map(t => ({...t, projectId: p.id}))
-    );
-    // Flatten training todos with trainingId
-    const allTrainTodos = (state.trainings||[]).flatMap(tr =>
-      (tr.todos||[]).map(t => ({...t, trainingId: tr.id}))
-    );
 
-    await Promise.all([
-      sheetsUpdate('Projects', projectsToRows(state.projects)),
-      sheetsUpdate('Todos', todosToRows(allTodos), state._pendingNotify||[]),
-      sheetsUpdate('AdHocTasks', adHocToRows(state.adHocTasks||[]), state._pendingAdHocNotify||[]),
-      sheetsUpdate('Goals', goalsToRows(state.teamGoals||[])),
-      sheetsUpdate('ExcelReports', excelReportsToRows(state.excelReports||[])),
-      sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])),
-      sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]),
-      sheetsUpdate('ProjectGroups', [['name'], ...(state.projectGroups||[]).map(g=>[g])]),
-      (function(){
+  // Flatten todos with projectId
+  const allTodos = state.projects.flatMap(p =>
+    (p.todos||[]).map(t => ({...t, projectId: p.id}))
+  );
+  // Flatten training todos with trainingId
+  const allTrainTodos = (state.trainings||[]).flatMap(tr =>
+    (tr.todos||[]).map(t => ({...t, trainingId: tr.id}))
+  );
+
+  // Each sheet saves independently (fault isolation, same idea as the
+  // safeGet pattern used on load) so one bad sheet can't silently fail
+  // while everything else saves fine, masking which sheet actually broke.
+  const saveTasks = [
+    { name:'Projects',      fn:() => sheetsUpdate('Projects', projectsToRows(state.projects)) },
+    { name:'Todos',         fn:() => sheetsUpdate('Todos', todosToRows(allTodos), state._pendingNotify||[]) },
+    { name:'AdHocTasks',    fn:() => sheetsUpdate('AdHocTasks', adHocToRows(state.adHocTasks||[]), state._pendingAdHocNotify||[]) },
+    { name:'Goals',         fn:() => sheetsUpdate('Goals', goalsToRows(state.teamGoals||[])) },
+    { name:'ExcelReports',  fn:() => sheetsUpdate('ExcelReports', excelReportsToRows(state.excelReports||[])) },
+    { name:'Trainings',     fn:() => sheetsUpdate('Trainings', trainingsToRows(state.trainings||[])) },
+    { name:'TrainingTodos', fn:() => sheetsUpdate('TrainingTodos', trainingTodosToRows(allTrainTodos), state._pendingTrainingNotify||[]) },
+    { name:'ProjectGroups', fn:() => sheetsUpdate('ProjectGroups', [['name'], ...(state.projectGroups||[]).map(g=>[g])]) },
+    { name:'TimeLog',       fn:() => {
         // Save full time log history (not just today) — use active date, not hardcoded today
         var activeDateStr = ttActiveDateLocalStr();
         var historical = (tt.allEntries||[]).filter(function(e){ return new Date(e.startTime).toLocaleDateString() !== activeDateStr; });
         var fullLog = historical.concat(tt.entries);
         tt.allEntries = fullLog;
         return sheetsUpdate('TimeLog', timeLogToRows(fullLog));
-      })()
-    ]);
+      } }
+  ];
+
+  const results = await Promise.allSettled(saveTasks.map(t => t.fn()));
+  const failures = [];
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      failures.push(saveTasks[i].name);
+      console.error('Save error [' + saveTasks[i].name + ']:', r.reason);
+    }
+  });
+
+  if (!failures.length) {
     state._pendingNotify = [];
     state._pendingAdHocNotify = [];
     state._pendingTrainingNotify = [];
-
     showToast('Saved to Google Sheets ✓', false);
-  } catch(e) {
-    console.error('Save error:', e);
-    showToast('Save failed — check Apps Script deployment', true);
+  } else {
+    showToast('Save failed: ' + failures.join(', ') + ' — see console', true);
   }
+
   syncing = false;
   if (pendingSave) { pendingSave = false; saveState(); }
 }
@@ -2844,6 +2857,26 @@ function ttRenderLog(){var list=document.getElementById('tt-logList');if(!list)r
 function ttUpdateSummary(){var total=0,rockTotal=0;for(var i=0;i<tt.entries.length;i++){total+=tt.entries[i].duration;if(tt.entries[i].checks&&tt.entries[i].checks.rock)rockTotal+=tt.entries[i].duration;}var h=Math.floor(total/3600),m=Math.floor((total%3600)/60);var el=document.getElementById('tt-totalToday');if(el)el.textContent=h+'h '+m+'m';var sc=document.getElementById('tt-sessionCount');if(sc)sc.textContent=tt.entries.length;var rh=Math.floor(rockTotal/3600),rm=Math.floor((rockTotal%3600)/60);var rt=document.getElementById('tt-rockTime');if(rt)rt.textContent=rh+'h '+rm+'m';var cats={},top=null,topVal=0;for(var i=0;i<tt.entries.length;i++)cats[tt.entries[i].cat]=(cats[tt.entries[i].cat]||0)+tt.entries[i].duration;for(var k in cats){if(cats[k]>topVal){topVal=cats[k];top=k;}}var tc=document.getElementById('tt-topCat');if(tc)tc.textContent=top?TT_CAT_LABELS[top]:'—';}
 
 function renderTimeTracker(){var dateStr=ttActiveDateFull();var isToday=ttIsToday();var activeDateVal=ttGetActiveDateStr();var todayVal=(function(){var n=new Date();return n.getFullYear()+'-'+ttPad(n.getMonth()+1)+'-'+ttPad(n.getDate());})();var isFuture=tt.activeDate&&(function(){var n=new Date();n.setHours(0,0,0,0);return tt.activeDate>n;}());var openAdHocCount=(state.adHocTasks||[]).filter(function(t){return !t.done;}).length;return`<style>.tt-timer{font-size:48px;font-weight:500;letter-spacing:3px;color:var(--text);margin-bottom:1rem;font-variant-numeric:tabular-nums;}.tt-timer.tt-running{color:#0F6E56;}.tt-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px;}.tt-check-lbl{display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text);transition:background 0.1s,border-color 0.1s;}.tt-check-lbl input{cursor:pointer;}.tt-check-active-rock{border-color:#EF9F27!important;background:#FAEEDA!important;}.tt-check-active-issue{border-color:#E24B4A!important;background:#FCEBEB!important;}.tt-check-active-project{border-color:#7F77DD!important;background:#EEEDFE!important;}.tt-check-active-task{border-color:#1D9E75!important;background:#E1F5EE!important;}.tt-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap;}.tt-tag-pbi{background:#B5D4F4;color:#042C53;}.tt-tag-sql{background:#85B7EB;color:#042C53;}.tt-tag-dev{background:#E6F1FB;color:#0C447C;}.tt-tag-docs{background:#E1F5EE;color:#085041;}.tt-tag-meet{background:#EEEDFE;color:#3C3489;}.tt-tag-review{background:#EAF3DE;color:#27500A;}.tt-tag-admin{background:#FAEEDA;color:#633806;}.tt-tag-lunch{background:#C0DD97;color:#173404;}.tt-tag-ooo{background:#F5C4B3;color:#4A1B0C;}.tt-tag-train{background:#CECBF6;color:#26215C;}.tt-tag-traina{background:#AFA9EC;color:#26215C;}.tt-tag-other{background:#f0ede8;color:#555;}.tt-tag-rock{background:#EF9F27;color:#412402;}.tt-tag-issue{background:#F09595;color:#501313;}.tt-tag-proj{background:#AFA9EC;color:#26215C;}.tt-tag-task{background:#5DCAA5;color:#04342C;}.tt-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:1.25rem;}.tt-metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center;box-shadow:var(--shadow);}.tt-metric-val{font-size:20px;font-weight:600;color:var(--text);}.tt-metric-lbl{font-size:11px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:0.04em;}.btn-finish{background:#0F6E56;border-color:#0F6E56;color:#fff;}.btn-finish:hover{background:#085041;border-color:#085041;}.tt-past-banner{display:flex;align-items:center;gap:10px;border-radius:var(--radius);padding:10px 16px;margin-bottom:1rem;font-size:13px;}.tt-past-banner-icon{font-size:16px;flex-shrink:0;}</style><div class="topbar"><div class="topbar-left"><div class="breadcrumb">Data Team</div><h1>Time Tracker</h1><div class="subtitle" id="tt-date-subtitle">${dateStr}</div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label style="font-size:12px;font-weight:500;color:var(--text3);">Logging for:</label><input type="date" id="tt-date-picker" value="${activeDateVal}" max="" onchange="ttSwitchDate(this.value)" style="font-family:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;" />${isToday?'':'<button class="btn btn-sm" onclick="ttSwitchDate(\'\')">Back to Today</button>'}</div></div><div id="tt-past-banner" style="display:${isToday?'none':'flex'};align-items:center;gap:10px;background:${isFuture?'#EEF3FB':'#FEF3E2'};border:1px solid ${isFuture?'#9BBCE8':'#F6C87A'};color:${isFuture?'#1A4D8F':'#7A4A00'};border-radius:var(--radius);padding:10px 16px;margin-bottom:1rem;font-size:13px;"><span class="tt-past-banner-icon">${isFuture?'📆':'📅'}</span><span>You are logging time for a <strong>${isFuture?'future date':'past date'}</strong>. The live timer is disabled — use the manual start/end time fields to log entries.</span></div><div class="main-nav"><div class="main-nav-tab" onclick="goMaster()">Projects</div><div class="main-nav-tab" onclick="goAdHoc()">Ad Hoc Tasks</div><div class="main-nav-tab" onclick="goGoals()">Goals</div><div class="main-nav-tab" onclick="goExcel()">Legacy Report Tracking</div><div class="main-nav-tab" onclick="goTraining()">Training</div><div class="main-nav-tab" onclick="goMasterTodos()">Master To Dos</div><div class="main-nav-tab active" onclick="goTimeTracker()">Time Tracker</div></div><div class="card"><div id="tt-timer-area" style="display:${isToday?'block':'none'};"><div class="tt-timer" id="tt-display">${ttFmtSec(tt.elapsed)}</div></div><div id="tt-manual-area" style="display:${isToday?'none':'block'};margin-bottom:8px;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">Start Time</label><input type="time" id="tt-manual-start" style="font-family:inherit;font-size:13px;" /></div><div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">End Time</label><input type="time" id="tt-manual-end" style="font-family:inherit;font-size:13px;" /></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;"><input type="text" id="tt-taskInput" placeholder="What are you working on?" /><select id="tt-catSelect">${TT_CAT_OPTS}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;"><select id="tt-ownerSelect" onchange="ttRefreshDropdowns()"><option value="">— Owner —</option><option value="Manager">Manager</option><option value="Analyst">Analyst</option></select><select id="tt-rockSelect">${ttBuildRockOpts("", "")}</select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;"><select id="tt-adHocSelect">${ttBuildAdHocOpts('')}</select><select id="tt-projectSelect">${ttBuildProjectOpts('', '')}</select></div><div style="margin-bottom:8px;"><select id="tt-legacySelect" style="width:100%;">${ttBuildLegacyOpts('', '')}</select></div></div><div class="tt-checks"><label class="tt-check-lbl" id="tt-lbl-rock"><input type="checkbox" id="tt-chk-rock" onchange="ttUpdateCheck(\'rock\')" /> Rock Related</label><label class="tt-check-lbl" id="tt-lbl-issue"><input type="checkbox" id="tt-chk-issue" onchange="ttUpdateCheck(\'issue\')" /> Issue / Problem Solve</label><label class="tt-check-lbl" id="tt-lbl-project"><input type="checkbox" id="tt-chk-project" onchange="ttUpdateCheck(\'project\')" /> Project</label><label class="tt-check-lbl" id="tt-lbl-task"><input type="checkbox" id="tt-chk-task" onchange="ttUpdateCheck(\'task\')" /> Task</label></div><textarea id="tt-descInput" placeholder="Description (optional)…" style="width:100%;font-size:13px;font-family:inherit;min-height:60px;resize:vertical;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;">${isToday?`<button class="btn btn-primary" id="tt-startBtn" onclick="ttStartTimer()" ${tt.running?'disabled':''}>Start</button><button class="btn" id="tt-stopBtn" onclick="ttStopTimer()" ${!tt.running?'disabled':''}>Stop &amp; log</button><button class="btn" onclick="ttDiscardTimer()">Discard</button>`:'<button class="btn btn-primary" onclick="ttLogManualEntry()">Log Entry</button><button class="btn" onclick="ttResetTimer()">Clear</button>'}</div></div><div class="tt-metrics"><div class="tt-metric"><div class="tt-metric-val" id="tt-totalToday">0h 0m</div><div class="tt-metric-lbl">${isToday?'Today':'That day'}</div></div><div class="tt-metric"><div class="tt-metric-val" id="tt-sessionCount">0</div><div class="tt-metric-lbl">Sessions</div></div><div class="tt-metric"><div class="tt-metric-val" id="tt-rockTime">0h 0m</div><div class="tt-metric-lbl">Rock time</div></div><div class="tt-metric"><div class="tt-metric-val" id="tt-topCat">—</div><div class="tt-metric-lbl">Top category</div></div></div><div class="card" style="padding:0;overflow:hidden;"><div style="padding:12px 1.25rem;font-size:13px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><span id="tt-log-header-date">${isToday?"Today\'s log":(tt.activeDate?tt.activeDate.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})+' log':'Log')}</span><button class="btn btn-sm" onclick="ttExportExcel()">Download Excel</button></div><div id="tt-logList"><div style="padding:2rem;text-align:center;color:var(--text3);font-size:14px;">No sessions yet — ${isToday?'start the timer to log time.':'add entries using the form above.'}</div></div></div><div id="tt-finishConfirm" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow);"><p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">You have <strong id="tt-finishCount">0</strong> entries totalling <strong id="tt-finishTotal">0h 0m</strong>. Clicking <strong>Save &amp; Finish</strong> will download a CSV and sync to Google Sheets.</p><div style="display:flex;gap:8px;"><button class="btn btn-finish" onclick="ttSaveAndFinish()">Save &amp; Finish</button><button class="btn" onclick="ttCancelFinish()">Cancel</button></div></div><div style="display:flex;justify-content:flex-end;padding:1rem 0 0;"><button class="btn btn-finish" onclick="ttShowFinish()">Finish Day</button></div>`;}
+
+/* ── Keep state fresh across tabs/sessions ──
+   Every saveState() rewrites entire sheets from whatever's in this
+   tab's memory, so a stale background tab can silently overwrite
+   changes made elsewhere. Refresh from Sheets when this tab regains
+   focus, and periodically while idle — skipping refresh if a modal
+   is open so we don't yank data out from under an active edit. */
+let lastRefresh = Date.now();
+async function refreshIfStale(minAgeMs) {
+  if (document.getElementById('modal-overlay').classList.contains('open')) return;
+  if (Date.now() - lastRefresh < minAgeMs) return;
+  lastRefresh = Date.now();
+  await loadState();
+  render();
+}
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') refreshIfStale(15000);
+});
+window.addEventListener('focus', function() { refreshIfStale(15000); });
+setInterval(function() { refreshIfStale(120000); }, 60000);
 
 loadState().then(() => render()).catch(() => render());
 </script>
