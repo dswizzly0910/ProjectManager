@@ -783,7 +783,16 @@ function checkSvg() { return `<svg width="11" height="9" viewBox="0 0 11 9" fill
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 /* ── Render ── */
-function render() { document.getElementById('root').innerHTML = state.view==='master'?renderMaster():state.view==='adhoc'?renderAdHoc():state.view==='goals'?renderGoals():state.view==='excel'?renderExcel():state.view==='training'?renderTraining():state.view==='mastertodos'?renderMasterTodos():state.view==='timetracker'?renderTimeTracker():renderProject(state.activeProject); }
+function render() {
+  document.getElementById('root').innerHTML = state.view==='master'?renderMaster():state.view==='adhoc'?renderAdHoc():state.view==='goals'?renderGoals():state.view==='excel'?renderExcel():state.view==='training'?renderTraining():state.view==='mastertodos'?renderMasterTodos():state.view==='timetracker'?renderTimeTracker():renderProject(state.activeProject);
+  if (state.view === 'timetracker') {
+    ttRenderLog();
+    if (tt.running) {
+      var d = document.getElementById('tt-display');
+      if (d) { d.textContent = ttFmtSec(tt.elapsed); d.classList.add('tt-running'); }
+    }
+  }
+}
 
 /* ── Master board ── */
 function renderMaster() {
@@ -2880,6 +2889,8 @@ function renderTimeTracker(){var dateStr=ttActiveDateFull();var isToday=ttIsToda
 let lastRefresh = Date.now();
 async function refreshIfStale(minAgeMs) {
   if (document.getElementById('modal-overlay').classList.contains('open')) return;
+  var ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
   if (Date.now() - lastRefresh < minAgeMs) return;
   lastRefresh = Date.now();
   await loadState();
