@@ -494,14 +494,14 @@ function rowsToGoals(rows) {
   return data.map(r => {
     const o = {};
     hdr.forEach((h,i) => o[h] = r[i]||'');
-    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:toPlainDateStr(o.deadline), achieved:parseBool(o.achieved), isRock:parseBool(o.isRock), quarter:o.quarter||'', smartS:o.smartS||'', smartM:o.smartM||'', smartA:o.smartA||'', smartR:o.smartR||'', smartT:o.smartT||'' };
+    return { id:o.id, title:o.title, description:o.description, owner:o.owner, deadline:toPlainDateStr(o.deadline), achieved:parseBool(o.achieved), isRock:parseBool(o.isRock), quarter:o.quarter||'', smartS:o.smartS||'', smartM:o.smartM||'', smartA:o.smartA||'', smartR:o.smartR||'', smartT:o.smartT||'', status:o.status||'' };
   }).filter(g => g.id);
 }
 
 function goalsToRows(goals) {
-  const hdr = ['id','title','description','owner','deadline','achieved','isRock','quarter','smartS','smartM','smartA','smartR','smartT'];
+  const hdr = ['id','title','description','owner','deadline','achieved','isRock','quarter','smartS','smartM','smartA','smartR','smartT','status'];
   const rows = [hdr];
-  goals.forEach(g => rows.push([g.id, g.title||'', g.description||'', g.owner||'', g.deadline||'', String(!!g.achieved), String(!!g.isRock), g.quarter||'', g.smartS||'', g.smartM||'', g.smartA||'', g.smartR||'', g.smartT||'']));
+  goals.forEach(g => rows.push([g.id, g.title||'', g.description||'', g.owner||'', g.deadline||'', String(!!g.achieved), String(!!g.isRock), g.quarter||'', g.smartS||'', g.smartM||'', g.smartA||'', g.smartR||'', g.smartT||'', g.status||'']));
   return rows;
 }
 
@@ -682,7 +682,7 @@ const PROJECT_PRIORITY_OPTIONS = ['Very Low','Low','Important','Very Important',
 const TASK_PRIORITY_OPTIONS = ['Urgent','Very Important','Important','Low','Very Low'];
 // PROJECT_GROUP_OPTIONS is now dynamic — use state.projectGroups instead
 
-let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:true, filterOwner:'', projects:[], adHocTasks:[], adHocGroup:'none', hideCompleteAdHoc:true, teamGoals:[], excelReports:[], trainings:[], expandedTraining:null, hideCompleteMasterTodos:true, masterTodoGroup:'owner', projectGroups:['Excel to Power BI Migrations','AI Projects'], projectViewMode:'list', goalsGroup:'none' };
+let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:true, filterOwner:'', projects:[], adHocTasks:[], adHocGroup:'none', hideCompleteAdHoc:true, teamGoals:[], excelReports:[], trainings:[], expandedTraining:null, hideCompleteMasterTodos:true, hideCompleteProjectTodos:false, masterTodoGroup:'owner', hideCompleteGoals:false, projectGroups:['Excel to Power BI Migrations','AI Projects'], projectViewMode:'list', goalsGroup:'none' };
 
 const DEFAULT_PROJECTS = [
   { id:'p1', name:'Website Redesign', status:'active', owner:'Manager',
@@ -1223,10 +1223,16 @@ function renderProject(id) {
 
   if(state.activeTab==='todos') {
     const grp = state.todoGroup || 'none';
+    const hideCompPT = !!state.hideCompleteProjectTodos;
+    const visibleTodos = hideCompPT ? p.todos.filter(t=>!t.done) : p.todos;
     html+=`
     <div class="todo-controls">
       <div style="font-size:13px;color:var(--text2)">${p.todos.filter(t=>t.done).length} of ${p.todos.length} tasks complete</div>
       <div class="todo-controls-left">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);user-select:none;">
+          <input type="checkbox" ${hideCompPT?'checked':''} onchange="toggleHideCompleteProjectTodos()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+          Hide completed
+        </label>
         <span class="group-label">Group by:</span>
         <select class="group-select" onchange="setTodoGroup(this.value)">
           <option value="none" ${grp==='none'?'selected':''}>None</option>
@@ -1240,8 +1246,10 @@ function renderProject(id) {
 
     if(!p.todos.length) {
       html+=`<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">No tasks yet. Add one above.</div></div></div>`;
+    } else if(!visibleTodos.length) {
+      html+=`<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">All tasks complete.</div></div></div>`;
     } else {
-      html += renderGroupedTodos(p, id, grp);
+      html += renderGroupedTodos({...p, todos: visibleTodos}, id, grp);
     }
   }
   return html;
@@ -1489,10 +1497,11 @@ function renderGoals() {
         </div>
       </div>
       ${g.description?`<div class="goal-card-desc">${esc(g.description)}</div>`:''}
+      ${g.status?`<div style="font-size:12px;color:var(--text2);margin-top:8px;padding:7px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border);line-height:1.5;"><span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:3px;">Status</span>${esc(g.status)}</div>`:''}
       ${g.isRock && (g.smartS||g.smartM||g.smartA||g.smartR||g.smartT) ? `
       <div>
-        <button onclick="(function(btn){var s=btn.closest('.goal-card').querySelector('.smart-body');var shown=s.style.display!=='none';s.style.display=shown?'none':'flex';btn.textContent=shown?'Show S.M.A.R.T. ▸':'Hide S.M.A.R.T. ▾';})(this)" style="font-size:11px;font-weight:600;color:#1a5c2a;background:#D4EDDA;border:1px solid #81C78450;border-radius:100px;padding:3px 10px;cursor:pointer;margin-bottom:8px;">Hide S.M.A.R.T. ▾</button>
-        <div class="smart-body" style="display:flex;flex-direction:column;gap:8px;">
+        <button onclick="(function(btn){var s=btn.closest('.goal-card').querySelector('.smart-body');var shown=s.style.display!=='none';s.style.display=shown?'none':'flex';btn.textContent=shown?'Show S.M.A.R.T. ▸':'Hide S.M.A.R.T. ▾';})(this)" style="font-size:11px;font-weight:600;color:#1a5c2a;background:#D4EDDA;border:1px solid #81C78450;border-radius:100px;padding:3px 10px;cursor:pointer;margin-bottom:8px;">Show S.M.A.R.T. ▸</button>
+        <div class="smart-body" style="display:none;flex-direction:column;gap:8px;">
         ${[['S','Specific',g.smartS],['M','Measurable',g.smartM],['A','Attainable',g.smartA],['R','Relevant',g.smartR],['T','Timely',g.smartT]].filter(x=>x[2]).map(([letter,label,val])=>`
         <div style="background:#E8F5E950;border:1px solid #81C78450;border-radius:6px;padding:8px 10px;">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
@@ -1509,12 +1518,45 @@ function renderGoals() {
     </div>`;
   }
 
-  const rocks = goals.filter(g=>g.isRock);
-  const otherGoals = goals.filter(g=>!g.isRock);
+  function goalKanbanCard(g, opts) {
+    const ds = deadlineStatus(g.deadline, g.achieved);
+    const dl = deadlineLabel(g.deadline, g.achieved);
+    const showOwner = opts && opts.showOwner && g.owner;
+    return `
+    <div class="kanban-card" style="${g.achieved?'opacity:0.6;':''}">
+      <div class="kanban-card-name">${g.isRock?'🪨 ':''}${esc(g.title)}</div>
+      <div class="kanban-card-meta">
+        ${showOwner ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px 2px 3px;border-radius:100px;font-weight:600;background:var(--surface2);color:var(--text2);white-space:nowrap;"><span class="member-avatar ${avatarClass(g.owner)}" style="width:14px;height:14px;font-size:8px;">${initials(g.owner)}</span>${esc(g.owner)}</span>` : ''}
+        ${g.isRock && g.quarter ? `<span style="font-size:10px;padding:2px 7px;border-radius:100px;font-weight:600;background:#FEF3E2;color:#B45309;white-space:nowrap;">${esc(g.quarter)}</span>` : ''}
+        ${g.achieved ? `<span class="goal-achieved-badge" style="font-size:10px;"><svg width="9" height="7" viewBox="0 0 11 9" fill="none"><polyline points="1,4.5 4.5,8 10,1" stroke="#1a6b4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Achieved</span>` : ''}
+        ${g.deadline ? `<span class="goal-deadline ${ds}" style="font-size:10px;">${dl}</span>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="btn btn-sm ${g.achieved?'btn-edit':'btn-primary'}" style="font-size:11px;padding:3px 8px;" onclick="toggleGoalAchieved('${g.id}')">${g.achieved?'Reopen':'Mark achieved'}</button>
+        <button class="btn btn-sm btn-edit btn-icon" onclick="openEditGoal('${g.id}')" title="Edit">✎</button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteGoal('${g.id}')" title="Delete">×</button>
+      </div>
+    </div>`;
+  }
+
+  function sortDoneByDeadline(arr) {
+    return [...arr].sort((a, b) => {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return a.deadline.localeCompare(b.deadline);
+    });
+  }
+
+  const hideCompGoals = !!state.hideCompleteGoals;
+  const displayGoals = hideCompGoals ? goals.filter(g => !g.achieved) : goals;
+
+  const rocks = displayGoals.filter(g=>g.isRock);
+  const otherGoals = displayGoals.filter(g=>!g.isRock);
   const rocksOpen = rocks.filter(g=>!g.achieved);
-  const rocksDone = rocks.filter(g=>g.achieved);
+  const rocksDone = sortDoneByDeadline(rocks.filter(g=>g.achieved));
   const othersOpen = otherGoals.filter(g=>!g.achieved);
-  const othersDone = otherGoals.filter(g=>g.achieved);
+  const othersDone = sortDoneByDeadline(otherGoals.filter(g=>g.achieved));
 
   function sectionHtml(label, icon, openItems, doneItems, emptyMsg, accentColor) {
     const total = openItems.length + doneItems.length;
@@ -1564,9 +1606,15 @@ function renderGoals() {
       <div style="font-size:13px;color:var(--text3);margin-top:2px;">${achieved} of ${goals.length} achieved</div>
     </div>
     <div class="board-controls">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);user-select:none;">
+        <input type="checkbox" ${hideCompGoals?'checked':''} onchange="toggleHideCompleteGoals()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+        Hide completed
+      </label>
+      <span style="width:1px;height:18px;background:var(--border2);display:inline-block;margin:0 2px;"></span>
       <span class="board-controls-label">Group by:</span>
       <button class="sort-btn ${(state.goalsGroup||'none')==='none'?'active':''}" onclick="setGoalsGroup('none')">None</button>
       <button class="sort-btn ${(state.goalsGroup||'none')==='owner'?'active':''}" onclick="setGoalsGroup('owner')">Owner</button>
+      <button class="sort-btn ${(state.goalsGroup||'none')==='quarter'?'active':''}" onclick="setGoalsGroup('quarter')">Quarter</button>
     </div>
   </div>`;
 
@@ -1574,11 +1622,36 @@ function renderGoals() {
     html += `<div class="todo-list"><div class="empty"><div class="empty-icon">🎯</div><div class="empty-text">No goals yet. Add one above.</div></div></div>`;
     return html;
   }
+  if (!displayGoals.length) {
+    html += `<div class="todo-list"><div class="empty"><div class="empty-icon">✓</div><div class="empty-text">All goals complete.</div></div></div>`;
+    return html;
+  }
+
+  function goalKanbanColumn(headerHtml, columnGoals, opts) {
+    const rocks = columnGoals.filter(g => g.isRock);
+    const otherGoals = columnGoals.filter(g => !g.isRock);
+    const rocksSorted = [...rocks.filter(g=>!g.achieved), ...sortDoneByDeadline(rocks.filter(g=>g.achieved))];
+    const otherGoalsSorted = [...otherGoals.filter(g=>!g.achieved), ...sortDoneByDeadline(otherGoals.filter(g=>g.achieved))];
+    let colBody = '';
+    if (rocksSorted.length) {
+      colBody += `<div style="font-size:10px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:0.06em;margin:4px 4px 2px;">Rocks (${rocksSorted.length})</div>`;
+      colBody += rocksSorted.map(g=>goalKanbanCard(g, opts)).join('');
+    }
+    if (otherGoalsSorted.length) {
+      colBody += `<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:${rocksSorted.length?'12px':'4px'} 4px 2px;">Other Goals (${otherGoalsSorted.length})</div>`;
+      colBody += otherGoalsSorted.map(g=>goalKanbanCard(g, opts)).join('');
+    }
+    if (!columnGoals.length) colBody = `<div style="padding:16px 8px;text-align:center;color:var(--text3);font-size:12px;">No goals</div>`;
+    return `<div class="kanban-col">
+      <div class="kanban-col-header">${headerHtml}</div>
+      <div class="kanban-col-body">${colBody}</div>
+    </div>`;
+  }
 
   if ((state.goalsGroup || 'none') === 'owner') {
     const OWNER_ORDER = ['Manager', 'Analyst', 'Team'];
     const ownerMap = {};
-    goals.forEach(g => {
+    displayGoals.forEach(g => {
       const k = g.owner || 'Unassigned';
       if (!ownerMap[k]) ownerMap[k] = [];
       ownerMap[k].push(g);
@@ -1589,28 +1662,39 @@ function renderGoals() {
       if (ai === -1) return 1; if (bi === -1) return -1;
       return ai - bi;
     });
+    html += `<div class="kanban-board" style="grid-template-columns:repeat(${owners.length},minmax(240px,1fr));">`;
     owners.forEach(owner => {
       const ownerGoals = ownerMap[owner];
-      const rocks = ownerGoals.filter(g => g.isRock);
-      const otherGoals = ownerGoals.filter(g => !g.isRock);
-      const rocksOpen = rocks.filter(g => !g.achieved);
-      const rocksDone = rocks.filter(g => g.achieved);
-      const othersOpen = otherGoals.filter(g => !g.achieved);
-      const othersDone = otherGoals.filter(g => g.achieved);
       const ownerAchieved = ownerGoals.filter(g => g.achieved).length;
-      html += `<div style="margin-bottom:36px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid var(--border);">
-          <span class="member-avatar ${avatarClass(owner)}">${initials(owner)}</span>
-          <div>
-            <div style="font-size:15px;font-weight:700;color:var(--text);">${esc(owner)}</div>
-            <div style="font-size:12px;color:var(--text3);">${ownerAchieved} of ${ownerGoals.length} achieved</div>
-          </div>
-        </div>`;
-      if (rocks.length) html += sectionHtml('Rocks', '', rocksOpen, rocksDone, 'No rocks.', '#EF9F27');
-      if (otherGoals.length) html += sectionHtml('Other Goals', '', othersOpen, othersDone, 'No other goals.', '#1a6b4a');
-      if (!rocks.length && !otherGoals.length) html += `<div style="padding:1rem;color:var(--text3);font-size:13px;">No goals.</div>`;
-      html += `</div>`;
+      const header = `<span class="kanban-col-title" style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;"><span class="member-avatar ${avatarClass(owner)}" style="width:20px;height:20px;font-size:10px;">${initials(owner)}</span>${esc(owner)}</span><span class="kanban-col-count">${ownerAchieved}/${ownerGoals.length}</span>`;
+      html += goalKanbanColumn(header, ownerGoals);
     });
+    html += `</div>`;
+    return html;
+  }
+
+  if ((state.goalsGroup || 'none') === 'quarter') {
+    const quarterMap = {};
+    displayGoals.forEach(g => {
+      const k = g.quarter || 'No Quarter';
+      if (!quarterMap[k]) quarterMap[k] = [];
+      quarterMap[k].push(g);
+    });
+    function quarterSortKey(q) {
+      if (q === 'No Quarter') return Infinity;
+      const m = q.match(/Q(\d),\s*(\d+)/);
+      if (!m) return Infinity - 1;
+      return parseInt(m[2]) * 10 + parseInt(m[1]);
+    }
+    const quarters = Object.keys(quarterMap).sort((a, b) => quarterSortKey(a) - quarterSortKey(b));
+    html += `<div class="kanban-board" style="grid-template-columns:repeat(${quarters.length},minmax(240px,1fr));">`;
+    quarters.forEach(q => {
+      const qGoals = quarterMap[q];
+      const qAchieved = qGoals.filter(g => g.achieved).length;
+      const header = `<span class="kanban-col-title" style="font-size:13px;text-transform:none;letter-spacing:0;">${esc(q)}</span><span class="kanban-col-count">${qAchieved}/${qGoals.length}</span>`;
+      html += goalKanbanColumn(header, qGoals, {showOwner: true});
+    });
+    html += `</div>`;
     return html;
   }
 
@@ -2008,12 +2092,23 @@ function renderMasterTodos() {
     });
   }
 
-  function renderGroup(label, items, headerClass) {
+  function renderGroup(label, items, headerClass, collapsible) {
     if (!items.length) return '';
     const sorted = sortTasks(items);
+    if (!collapsible) {
+      return `<div class="${headerClass||'member-section'}">
+        <div class="group-header">${esc(label)} <span style="font-weight:400;opacity:0.6">(${items.length})</span></div>
+        <div class="todo-list">${sorted.map(masterItemHtml).join('')}</div>
+      </div>`;
+    }
+    const key = 'mtd_dueDate_' + label;
+    const collapsed = !!state.collapsedGroups[key];
     return `<div class="${headerClass||'member-section'}">
-      <div class="group-header">${esc(label)} <span style="font-weight:400;opacity:0.6">(${items.length})</span></div>
-      <div class="todo-list">${sorted.map(masterItemHtml).join('')}</div>
+      <div class="group-header" style="cursor:pointer;display:flex;align-items:center;gap:8px;" onclick="toggleGroupCollapse('${key}')">
+        <span class="group-chevron ${collapsed?'collapsed':''}"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        ${esc(label)} <span style="font-weight:400;opacity:0.6">(${items.length})</span>
+      </div>
+      <div class="todo-list" style="${collapsed?'display:none':''}">${sorted.map(masterItemHtml).join('')}</div>
     </div>`;
   }
 
@@ -2076,7 +2171,7 @@ function renderMasterTodos() {
       else if (d <= endOfWeek) groups['Due This Week'].push(t);
       else groups['Due Later'].push(t);
     });
-    groupOrder.forEach(key => { html += renderGroup(key, groups[key]); });
+    groupOrder.forEach(key => { html += renderGroup(key, groups[key], null, true); });
     return html;
   }
 
@@ -2109,7 +2204,6 @@ function toggleTodoMaster(pid, tid) {
   const t = p.todos.find(x=>x.id===tid);
   if (!t) return;
   t.done = !t.done;
-  p.progress = p.todos.length ? Math.round(p.todos.filter(x=>x.done).length/p.todos.length*100) : 0;
   saveState(); render();
 }
 
@@ -2134,9 +2228,11 @@ function goTimeTracker() { state.view='timetracker'; render(); setTimeout(functi
 function toggleTrainingExpand(id) { state.expandedTraining = state.expandedTraining===id?null:id; render(); }
 function setFilterOwner(v) { state.filterOwner=v; render(); }
 function toggleHideCompleteAdHoc() { state.hideCompleteAdHoc=!state.hideCompleteAdHoc; render(); }
+function toggleHideCompleteProjectTodos() { state.hideCompleteProjectTodos=!state.hideCompleteProjectTodos; render(); }
 function toggleHideCompleteMasterTodos() { state.hideCompleteMasterTodos=!state.hideCompleteMasterTodos; render(); }
 function setMasterTodoGroup(v) { state.masterTodoGroup=v; render(); }
 function setGoalsGroup(v) { state.goalsGroup=v; render(); }
+function toggleHideCompleteGoals() { state.hideCompleteGoals=!state.hideCompleteGoals; render(); }
 
 /* ── Manage Project Groups ── */
 function openManageGroups() {
@@ -2244,6 +2340,7 @@ function goalForm(title, saveCall, g) {
     <div class="modal-title">${title}</div>
     <div class="form-group"><label class="form-label">Goal title *</label><input type="text" id="gf-title" value="${esc(d.title||'')}" placeholder="e.g. Migrate all Excel reports to Power BI"></div>
     <div class="form-group"><label class="form-label">Description</label><textarea id="gf-desc" placeholder="What does achieving this goal look like?">${esc(d.description||'')}</textarea></div>
+    <div class="form-group"><label class="form-label">Status</label><textarea id="gf-status" placeholder="Where are things at with this goal?">${esc(d.status||'')}</textarea></div>
     <div class="form-grid2">
       <div class="form-group"><label class="form-label">Owner</label><select id="gf-owner"><option value="">— Select —</option><option value="Manager" ${d.owner==='Manager'?'selected':''}>Manager</option><option value="Analyst" ${d.owner==='Analyst'?'selected':''}>Analyst</option><option value="Team" ${d.owner==='Team'?'selected':''}>Team</option></select></div>
       <div class="form-group"><label class="form-label">Deadline</label><input type="date" id="gf-deadline" value="${d.deadline||''}"></div>
@@ -2266,7 +2363,7 @@ function openNewGoal() { openModal(goalForm('Add goal','saveNewGoal()',null)); s
 function saveNewGoal() {
   const title=document.getElementById('gf-title').value.trim(); if(!title) return;
   if(!state.teamGoals) state.teamGoals=[];
-  state.teamGoals.push({ id:uid(), title, description:document.getElementById('gf-desc').value.trim(), owner:document.getElementById('gf-owner').value, deadline:document.getElementById('gf-deadline').value, achieved:false, isRock:document.getElementById('gf-isrock').checked, quarter:document.getElementById('gf-quarter').value, smartS:document.getElementById('gf-smart-s').value.trim(), smartM:document.getElementById('gf-smart-m').value.trim(), smartA:document.getElementById('gf-smart-a').value.trim(), smartR:document.getElementById('gf-smart-r').value.trim(), smartT:document.getElementById('gf-smart-t').value.trim() });
+  state.teamGoals.push({ id:uid(), title, description:document.getElementById('gf-desc').value.trim(), status:document.getElementById('gf-status').value.trim(), owner:document.getElementById('gf-owner').value, deadline:document.getElementById('gf-deadline').value, achieved:false, isRock:document.getElementById('gf-isrock').checked, quarter:document.getElementById('gf-quarter').value, smartS:document.getElementById('gf-smart-s').value.trim(), smartM:document.getElementById('gf-smart-m').value.trim(), smartA:document.getElementById('gf-smart-a').value.trim(), smartR:document.getElementById('gf-smart-r').value.trim(), smartT:document.getElementById('gf-smart-t').value.trim() });
   closeModal(); saveState(); render();
 }
 function openEditGoal(id) {
@@ -2278,7 +2375,7 @@ function saveEditGoal(id) {
   const title=document.getElementById('gf-title').value.trim(); if(!title) return;
   const g=state.teamGoals.find(x=>x.id===id);
   if(!g) return;
-  g.title=title; g.description=document.getElementById('gf-desc').value.trim(); g.owner=document.getElementById('gf-owner').value; g.deadline=document.getElementById('gf-deadline').value; g.isRock=document.getElementById('gf-isrock').checked; g.quarter=document.getElementById('gf-quarter').value; g.smartS=document.getElementById('gf-smart-s').value.trim(); g.smartM=document.getElementById('gf-smart-m').value.trim(); g.smartA=document.getElementById('gf-smart-a').value.trim(); g.smartR=document.getElementById('gf-smart-r').value.trim(); g.smartT=document.getElementById('gf-smart-t').value.trim();
+  g.title=title; g.description=document.getElementById('gf-desc').value.trim(); g.status=document.getElementById('gf-status').value.trim(); g.owner=document.getElementById('gf-owner').value; g.deadline=document.getElementById('gf-deadline').value; g.isRock=document.getElementById('gf-isrock').checked; g.quarter=document.getElementById('gf-quarter').value; g.smartS=document.getElementById('gf-smart-s').value.trim(); g.smartM=document.getElementById('gf-smart-m').value.trim(); g.smartA=document.getElementById('gf-smart-a').value.trim(); g.smartR=document.getElementById('gf-smart-r').value.trim(); g.smartT=document.getElementById('gf-smart-t').value.trim();
   closeModal(); saveState(); render();
 }
 
@@ -2477,13 +2574,11 @@ function openConfirm(message, onConfirm) {
 function toggleTodo(pid,tid) {
   const p=state.projects.find(x=>x.id===pid), t=p.todos.find(x=>x.id===tid);
   t.done=!t.done;
-  p.progress=p.todos.length?Math.round(p.todos.filter(x=>x.done).length/p.todos.length*100):0;
   saveState(); render();
 }
 function deleteTodo(pid,tid) {
   const p=state.projects.find(x=>x.id===pid);
   p.todos=p.todos.filter(x=>x.id!==tid);
-  p.progress=p.todos.length?Math.round(p.todos.filter(x=>x.done).length/p.todos.length*100):0;
   saveState(); render();
 }
 
