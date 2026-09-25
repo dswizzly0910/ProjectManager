@@ -3231,7 +3231,7 @@ function renderTimeSummary() {
 
   const projMap = {};
   // All-time totals (not limited to the 3-week window)
-  allEntries.forEach(function(e){ const k = e.project || 'No Project'; projMap[k] = (projMap[k]||0) + e.duration; });
+  allEntries.forEach(function(e){ if (!e.project) return; projMap[e.project] = (projMap[e.project]||0) + e.duration; });
   const projRows = Object.keys(projMap).map(function(k){ return { key:k, label:k, sec: projMap[k] }; }).sort(function(a,b){ return b.sec-a.sec; });
   const maxProjSec = Math.max(1, ...projRows.map(function(r){ return r.sec; }));
 
