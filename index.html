@@ -2319,6 +2319,7 @@ function exportTimeSummaryExcel() {
   }
 
   var cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - 13);
+  cutoff = mondayOf(cutoff);
   var allEntries = getMergedEntries();
   var entries = allEntries.filter(function(e){
     var d = new Date(e.startTime);
@@ -3152,6 +3153,7 @@ function renderTimeSummary() {
   const cutoff = new Date();
   cutoff.setHours(0,0,0,0);
   cutoff.setDate(cutoff.getDate() - 13);
+  cutoff.setTime(mondayOf(cutoff).getTime());
 
   const allEntries = getMergedEntries();
   const entries = allEntries.filter(function(e){
