@@ -3230,7 +3230,8 @@ function renderTimeSummary() {
   const maxCatSec = Math.max(1, ...catRows.map(function(r){ return r.sec; }));
 
   const projMap = {};
-  entries.forEach(function(e){ const k = e.project || 'No Project'; projMap[k] = (projMap[k]||0) + e.duration; });
+  // All-time totals (not limited to the 3-week window)
+  allEntries.forEach(function(e){ const k = e.project || 'No Project'; projMap[k] = (projMap[k]||0) + e.duration; });
   const projRows = Object.keys(projMap).map(function(k){ return { key:k, label:k, sec: projMap[k] }; }).sort(function(a,b){ return b.sec-a.sec; });
   const maxProjSec = Math.max(1, ...projRows.map(function(r){ return r.sec; }));
 
@@ -3349,7 +3350,7 @@ function renderTimeSummary() {
   </div>
 
   <div class="card" style="margin-bottom:20px;">
-    <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;">By Project</div>
+    <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;">By Project <span style="font-weight:400;color:var(--text3);">(All Time)</span></div>
     ${projRows.length ? projRows.map(function(r){ return barRow(r.label, r.sec, maxProjSec, '#6B7FDD'); }).join('') : `<div style="font-size:13px;color:var(--text3);padding:8px 0;">No entries in this period.</div>`}
   </div>
 
