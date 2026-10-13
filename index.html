@@ -690,7 +690,7 @@ const PROJECT_PRIORITY_OPTIONS = ['Very Low','Low','Important','Very Important',
 const TASK_PRIORITY_OPTIONS = ['Urgent','Very Important','Important','Low','Very Low'];
 // PROJECT_GROUP_OPTIONS is now dynamic — use state.projectGroups instead
 
-let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:true, filterOwner:'', projects:[], adHocTasks:[], adHocGroup:'none', hideCompleteAdHoc:true, teamGoals:[], excelReports:[], trainings:[], expandedTraining:null, hideCompleteMasterTodos:true, hideCompleteProjectTodos:false, masterTodoGroup:'dueDate', hideCompleteGoals:false, projectGroups:['Excel to Power BI Migrations','AI Projects'], projectViewMode:'list', goalsGroup:'none', goalsViewMode:'goals' };
+let state = { view:'master', activeProject:null, activeTab:'overview', todoGroup:'none', collapsedGroups:{}, sortBy:'none', groupByProject:true, hideComplete:true, filterOwner:'', projects:[], adHocTasks:[], adHocGroup:'none', hideCompleteAdHoc:true, teamGoals:[], excelReports:[], trainings:[], expandedTraining:null, hideCompleteMasterTodos:true, hideCompleteProjectTodos:false, masterTodoGroup:'dueDate', masterTodoOwner:'', hideCompleteGoals:false, projectGroups:['Excel to Power BI Migrations','AI Projects'], projectViewMode:'list', goalsGroup:'none', goalsViewMode:'goals' };
 
 const DEFAULT_PROJECTS = [
   { id:'p1', name:'Website Redesign', status:'active', owner:'Manager',
@@ -2085,7 +2085,10 @@ function renderMasterTodos() {
     sourceId: null
   }));
 
-  const allTasks = [...projectTodos, ...adHocTodos];
+  const ownerFilter = state.masterTodoOwner || '';
+  const allTasks = [...projectTodos, ...adHocTodos].filter(t =>
+    !ownerFilter || (ownerFilter === '__unassigned' ? !t.owner : t.owner === ownerFilter)
+  );
   const visibleTasks = hideComp ? allTasks.filter(t=>!t.done) : allTasks;
 
   const totalOpen = allTasks.filter(t=>!t.done).length;
@@ -2118,6 +2121,13 @@ function renderMasterTodos() {
         <input type="checkbox" ${hideComp?'checked':''} onchange="toggleHideCompleteMasterTodos()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
         Hide completed
       </label>
+      <span style="width:1px;height:18px;background:var(--border2);display:inline-block;margin:0 2px;"></span>
+      <span class="board-controls-label">Owner:</span>
+      <select class="group-select" onchange="setMasterTodoOwner(this.value)">
+        <option value="" ${!state.masterTodoOwner?'selected':''}>All owners</option>
+        ${OWNER_OPTIONS.map(o=>`<option value="${esc(o)}" ${state.masterTodoOwner===o?'selected':''}>${esc(o)}</option>`).join('')}
+        <option value="__unassigned" ${state.masterTodoOwner==='__unassigned'?'selected':''}>Unassigned</option>
+      </select>
       <span style="width:1px;height:18px;background:var(--border2);display:inline-block;margin:0 2px;"></span>
       <span class="board-controls-label">Group by:</span>
       <button class="sort-btn ${grp==='none'?'active':''}" onclick="setMasterTodoGroup('none')">None</button>
@@ -2396,6 +2406,7 @@ function toggleHideCompleteAdHoc() { state.hideCompleteAdHoc=!state.hideComplete
 function toggleHideCompleteProjectTodos() { state.hideCompleteProjectTodos=!state.hideCompleteProjectTodos; render(); }
 function toggleHideCompleteMasterTodos() { state.hideCompleteMasterTodos=!state.hideCompleteMasterTodos; render(); }
 function setMasterTodoGroup(v) { state.masterTodoGroup=v; render(); }
+function setMasterTodoOwner(v) { state.masterTodoOwner=v; render(); }
 function setGoalsGroup(v) { state.goalsGroup=v; render(); }
 function setGoalsViewMode(v) { state.goalsViewMode=v; render(); }
 function toggleHideCompleteGoals() { state.hideCompleteGoals=!state.hideCompleteGoals; render(); }
